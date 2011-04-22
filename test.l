@@ -1,8 +1,12 @@
 /* scanner for a toy Pascal-like language */
 
 %{
-	import "fmt"
+	package main
+
 	import "os"
+	import "io"
+	import "regexp"
+	import "fmt"
 %}
 
 DIGIT	[0-9]
@@ -12,13 +16,13 @@ ID	[a-z][a-z0-9]*
 
 {DIGIT}+	{
 			var v int
-			fmt.Sscanf(yytext, "%d", v)
+			fmt.Sscanf(yytext, "%d", &v)
 			fmt.Printf("An integer: %s (%d)\n", yytext, v)
 		}
 
 {DIGIT}+"."{DIGIT}*	{
-			var v float
-			fmt.Sscanf(yytext, "%f", v)
+			var v float32
+			fmt.Sscanf(yytext, "%f", &v)
 			fmt.Printf("A float: %s (%g)\n", yytext, v)
 		}
 
@@ -34,11 +38,11 @@ if|then|begin|end|procedure|function	{
 			fmt.Printf("An operator: %s\n", yytext)
 		}
 
-"{"[\^{}}\n]*"}"	/* eat up one-line comments */
+"{"[^{}\n]*"}"	/* eat up one-line comments */
 
-[ \t\n]+		/* eat up whitespace */
+[ \t\n]+	/* eat up whitespace */
 
-.			fmt.Printf("Unknown character: %s\n", yytext)
+.		fmt.Printf("Unknown character: %s\n", yytext)
 
 %%
 
@@ -47,3 +51,5 @@ func main() {
 
 	yylex()
 }
+
+func yylex() { }
