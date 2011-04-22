@@ -3,10 +3,9 @@
 %{
 	package main
 
-	import "os"
-	import "io"
-	import "regexp"
-	import "fmt"
+	import (
+		"fmt"
+	)
 %}
 
 DIGIT	[0-9]
@@ -48,8 +47,6 @@ if|then|begin|end|procedure|function	{
 
 func main() {
 	yyin = os.Stdin
-
 	yylex()
 }
 
-func yylex() { }

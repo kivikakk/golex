@@ -115,7 +115,15 @@ func parse(data []byte, out io.Writer) {
 			case PROLOGUE:
 				state = ACTIONS
 				out.Write([]byte(`
+					import (
+						"regexp"
+						"io"
+						"bufio"
+						"os"
+					)
+
 					var yyin io.Reader
+					var yyout io.Writer = os.Stdout
 					type yyrule struct {
 						regexp *regexp.Regexp
 						action func(yytext string)
@@ -267,5 +275,43 @@ func parse(data []byte, out io.Writer) {
 	if !wroteEnd {
 		out.Write([]byte("}\n"))
 	}
+
+	out.Write([]byte(`
+		func yylex() {
+			reader := bufio.NewReader(yyin)
+
+			data := ""
+
+			for {
+				line, err := reader.ReadString('\n')
+				if len(line) == 0 && err == os.EOF {
+					break
+				}
+
+				data += line
+			}
+
+			// Lex data.
+
+			for len(data) > 0 {
+				longestMatch, longestMatchLen := (func(string))(nil), -1
+				for _, v := range yyrules {
+					idxs := v.regexp.FindStringIndex(data)
+					if idxs != nil && idxs[0] == 0 {
+						if idxs[1] > longestMatchLen {
+							longestMatch, longestMatchLen = v.action, idxs[1]
+						}
+					}
+				}
+
+				if longestMatch == nil {
+					yyout.Write([]byte{data[0]})
+					data = data[1:]
+				} else {
+					longestMatch(data[:longestMatchLen])
+					data = data[longestMatchLen:]
+				}
+			}
+		}` + "\n"))
 }
 
