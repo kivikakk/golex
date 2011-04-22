@@ -1,0 +1,7 @@
+#!/bin/bash
+make
+./golex test.l
+cat test.l.go
+6g test.l.go
+6l test.l.6
+./6.out
