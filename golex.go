@@ -63,18 +63,19 @@ func trimComments(line string, inComment bool) (string, bool) {
 			return line[:idx] + trimmed, stillIn
 		}
 		return line, false
-	} 
-		
+	}
+
 	// In comment.
 	idx := strings.Index(line, "*/")
 	if idx == -1 {
 		return "", true
 	}
 
-	return trimComments(line[idx + 2:], false)
+	return trimComments(line[idx+2:], false)
 }
 
 type parseState int
+
 const (
 	PROLOGUE parseState = iota
 	PROLOGUE_LIT
@@ -84,6 +85,7 @@ const (
 )
 
 type regexpParseState int
+
 const (
 	ROOT regexpParseState = iota
 	QUOTES
@@ -140,7 +142,9 @@ func parse(data []byte, out io.Writer) {
 			switch state {
 			case PROLOGUE:
 				line, inComment = trimComments(line, inComment)
-				if len(strings.TrimSpace(line)) == 0 { continue }
+				if len(strings.TrimSpace(line)) == 0 {
+					continue
+				}
 
 				if line == "%{" {
 					state = PROLOGUE_LIT
@@ -188,10 +192,16 @@ func parse(data []byte, out io.Writer) {
 					switch rps {
 					case ROOT:
 						switch line[pi] {
-						case ' ', '\t': goto parsed
-						case '[': 	rps = CLASS
-						case '"':	rps = QUOTES; qStart = pi
-						case '{':	rps = SUBST; qStart = pi
+						case ' ', '\t':
+							goto parsed
+						case '[':
+							rps = CLASS
+						case '"':
+							rps = QUOTES
+							qStart = pi
+						case '{':
+							rps = SUBST
+							qStart = pi
 						case '/':
 							if trailingContextStart != -1 {
 								panic("multiple trailing contexts '/'")
@@ -199,7 +209,7 @@ func parse(data []byte, out io.Writer) {
 							trailingContextStart = pi
 						case '.':
 							repl := "[^\\n]"
-							line = line[:pi] + repl + line[pi + 1:]
+							line = line[:pi] + repl + line[pi+1:]
 							pi += len(repl) - 1
 						case '^':
 							if pi != 0 {
@@ -229,24 +239,24 @@ func parse(data []byte, out io.Writer) {
 						}
 					case QUOTES:
 						if line[pi] == '"' {
-							origQuoted := line[qStart + 1:pi]
+							origQuoted := line[qStart+1 : pi]
 							quoted := strings.Replace(origQuoted, "\\\"", "\"", -1)
 							quoted = regexp.QuoteMeta(quoted)
 
-							line = line[:qStart] + quoted + line[pi + 1:]
+							line = line[:qStart] + quoted + line[pi+1:]
 							pi += len(quoted) - len(origQuoted) - 2
 
 							rps = ROOT
 						}
 					case SUBST:
 						if line[pi] == '}' {
-							name := line[qStart + 1:pi]
+							name := line[qStart+1 : pi]
 							repl, found := patternSubstitutions[name]
 							if !found {
 								panic(fmt.Sprintf("substitution {%s} found, but no such name!", name))
 							}
 
-							line = line[:qStart] + "(" + repl + ")" + line[pi + 1:]
+							line = line[:qStart] + "(" + repl + ")" + line[pi+1:]
 							pi += 2 + len(repl) - len(name) - 2
 
 							rps = ROOT
@@ -254,7 +264,7 @@ func parse(data []byte, out io.Writer) {
 					}
 				}
 
-			parsed: 
+			parsed:
 				quotedPattern := line[:pi]
 
 				trailingContext := "nil"
@@ -376,4 +386,3 @@ func parse(data []byte, out io.Writer) {
 			return 0
 		}` + "\n"))
 }
-
