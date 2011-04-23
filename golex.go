@@ -125,8 +125,9 @@ func parse(data []byte, out io.Writer) {
 					var yyin io.Reader = os.Stdin
 					var yyout io.Writer = os.Stdout
 					type yyrule struct {
-						regexp *regexp.Regexp
-						action func() int
+						regexp   *regexp.Regexp
+						trailing *regexp.Regexp
+						action   func() int
 					}
 					var yyrules []yyrule = []yyrule{`))
 
@@ -191,7 +192,11 @@ func parse(data []byte, out io.Writer) {
 						case '[': 	rps = CLASS
 						case '"':	rps = QUOTES; qStart = pi
 						case '{':	rps = SUBST; qStart = pi
-						case '/':	trailingContextStart = pi
+						case '/':
+							if trailingContextStart != -1 {
+								panic("multiple trailing contexts '/'")
+							}
+							trailingContextStart = pi
 						case '.':
 							repl := "[^\\n]"
 							line = line[:pi] + repl + line[pi + 1:]
@@ -212,7 +217,9 @@ func parse(data []byte, out io.Writer) {
 								pi += 1
 							} else {
 								// last char.
-								line = line[:pi] + "(\\n|$)" + line[pi+1:]
+								trailingContextStart = pi
+								// line[pi+1:] should be empty anyway.
+								line = line[:pi] + "/\\n|$" + line[pi+1:]
 								pi += 6 - 1
 							}
 						}
@@ -249,11 +256,20 @@ func parse(data []byte, out io.Writer) {
 
 			parsed: 
 				quotedPattern := line[:pi]
-				fmt.Printf("before quoting: %s\n", quotedPattern)
+
+				trailingContext := "nil"
+				if trailingContextStart != -1 {
+					trailingContext = quotedPattern[trailingContextStart+1:]
+					quotedPattern = quotedPattern[:trailingContextStart]
+
+					trailingContext = strings.Replace(trailingContext, "\\", "\\\\", -1)
+					trailingContext = strings.Replace(trailingContext, "\"", "\\\"", -1)
+					trailingContext = fmt.Sprintf("regexp.MustCompile(\"%s\")", trailingContext)
+				}
+
+				fmt.Printf("before quoting: %s (/ %s)\n", quotedPattern, trailingContext)
 				quotedPattern = strings.Replace(quotedPattern, "\\", "\\\\", -1)
 				quotedPattern = strings.Replace(quotedPattern, "\"", "\\\"", -1)
-
-				quotedPattern = "\"" + quotedPattern + "\""
 
 				if firstPattern {
 					firstPattern = false
@@ -261,7 +277,7 @@ func parse(data []byte, out io.Writer) {
 					out.Write([]byte(",\n"))
 				}
 
-				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(%s), func() int {\n", quotedPattern)))
+				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, func() int {\n", quotedPattern, trailingContext)))
 
 				lastPattern = strings.TrimSpace(line[pi:])
 
