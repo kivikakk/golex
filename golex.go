@@ -126,8 +126,7 @@ func parse(data []byte, out io.Writer) {
 					var yyout io.Writer = os.Stdout
 					type yyrule struct {
 						regexp *regexp.Regexp
-						lenAdj bool
-						action func(yytext string)
+						action func() int
 					}
 					var yyrules []yyrule = []yyrule{`))
 
@@ -177,7 +176,7 @@ func parse(data []byte, out io.Writer) {
 				// Work out what the actual pattern is.
 				pi, rps := 0, ROOT
 				qStart := 0
-				lenAdj := -1
+				trailingContextStart := -1
 
 				for ; pi < len(line); pi++ {
 					if line[pi] == '\\' {
@@ -192,15 +191,30 @@ func parse(data []byte, out io.Writer) {
 						case '[': 	rps = CLASS
 						case '"':	rps = QUOTES; qStart = pi
 						case '{':	rps = SUBST; qStart = pi
+						case '/':	trailingContextStart = pi
 						case '.':
 							repl := "[^\\n]"
 							line = line[:pi] + repl + line[pi + 1:]
 							pi += len(repl) - 1
+						case '^':
+							if pi != 0 {
+								// ^ to be treated as non-special if not at start
+								// of line
+								line = line[:pi] + "\\^" + line[pi+1:]
+								pi += 1
+							}
 						case '$':
-							repl := "($|\\n)"
-							line = line[:pi] + repl + line[pi + 1:]
-							pi += len(repl) - 1
-							lenAdj = pi
+							if trailingContextStart != -1 {
+								panic("unescaped '$' in pattern found after trailing context '/'")
+							} else if pi != len(line)-1 && line[pi+1] != ' ' && line[pi+1] != '\t' {
+								// $ to be treated as non-special if not last char
+								line = line[:pi] + "\\$" + line[pi+1:]
+								pi += 1
+							} else {
+								// last char.
+								line = line[:pi] + "(\\n|$)" + line[pi+1:]
+								pi += 6 - 1
+							}
 						}
 					case CLASS:
 						if line[pi] == ']' {
@@ -235,6 +249,7 @@ func parse(data []byte, out io.Writer) {
 
 			parsed: 
 				quotedPattern := line[:pi]
+				fmt.Printf("before quoting: %s\n", quotedPattern)
 				quotedPattern = strings.Replace(quotedPattern, "\\", "\\\\", -1)
 				quotedPattern = strings.Replace(quotedPattern, "\"", "\\\"", -1)
 
@@ -246,12 +261,7 @@ func parse(data []byte, out io.Writer) {
 					out.Write([]byte(",\n"))
 				}
 
-				doLenAdj := "false"
-				if lenAdj == pi - 1 {
-					doLenAdj = "true"
-				}
-
-				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(%s), %s, func(yytext string) {\n", quotedPattern, doLenAdj)))
+				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(%s), func() int {\n", quotedPattern)))
 
 				lastPattern = strings.TrimSpace(line[pi:])
 
@@ -268,7 +278,7 @@ func parse(data []byte, out io.Writer) {
 				}
 
 				if state == ACTIONS {
-					out.Write([]byte(lastPattern + "\n}}"))
+					out.Write([]byte(lastPattern + "\nyyactionreturn = false; return 0}}"))
 				}
 
 			case ACTIONS_CONT:
@@ -276,7 +286,7 @@ func parse(data []byte, out io.Writer) {
 				if len(trimmed) > 0 && trimmed[len(trimmed)-1] == '}' {
 					lastPattern = strings.TrimSpace(lastPattern + line)
 					lastPattern = lastPattern[:len(lastPattern)-1]
-					out.Write([]byte(lastPattern + "\n}}"))
+					out.Write([]byte(lastPattern + "\nyyactionreturn = false; return 0}}"))
 					state = ACTIONS
 				} else {
 					lastPattern += line + "\n"
@@ -293,10 +303,17 @@ func parse(data []byte, out io.Writer) {
 	}
 
 	out.Write([]byte(`
-		func yylex() {
-			reader := bufio.NewReader(yyin)
+		var yydata string = ""
+		var yyactionreturn bool = false
 
-			data := ""
+		var yytext string = ""
+		var yytextrepl bool = true
+		func yymore() {
+			yytextrepl = false
+		}
+
+		func yylex() int {
+			reader := bufio.NewReader(yyin)
 
 			for {
 				line, err := reader.ReadString('\n')
@@ -304,35 +321,43 @@ func parse(data []byte, out io.Writer) {
 					break
 				}
 
-				data += line
+				yydata += line
 			}
 
-			// Lex data.
-
-			for len(data) > 0 {
-				longestMatch, longestMatchLen := (func(string))(nil), -1
+			for len(yydata) > 0 {
+				longestMatch, longestMatchLen := (func() int)(nil), -1
 				for _, v := range yyrules {
-					idxs := v.regexp.FindStringIndex(data)
+					idxs := v.regexp.FindStringIndex(yydata)
 					if idxs != nil && idxs[0] == 0 {
-						adjLen := idxs[1]
-						if v.lenAdj && idxs[1] > 0 && data[idxs[1]-1] == '\n' {
-							adjLen -= 1
-						}
-
-						if adjLen > longestMatchLen {
-							longestMatch, longestMatchLen = v.action, adjLen
+						if idxs[1] > longestMatchLen {
+							longestMatch, longestMatchLen = v.action, idxs[1]
 						}
 					}
 				}
 
+				if yytextrepl {
+					yytext = ""
+				}
+
 				if longestMatch == nil {
-					yyout.Write([]byte{data[0]})
-					data = data[1:]
+					yytext += yydata[:1]
+					yydata = yydata[1:]
+
+					yyout.Write([]byte(yytext))
 				} else {
-					longestMatch(data[:longestMatchLen])
-					data = data[longestMatchLen:]
+					yytext += yydata[:longestMatchLen]
+					yydata = yydata[longestMatchLen:]
+
+					yyactionreturn, yytextrepl = true, true
+					rv := longestMatch()
+
+					if yyactionreturn {
+						return rv
+					}
 				}
 			}
+
+			return 0
 		}` + "\n"))
 }
 
