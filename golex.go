@@ -190,6 +190,14 @@ func parse(data []byte, out io.Writer) {
 						case '[': 	rps = CLASS
 						case '"':	rps = QUOTES; qStart = pi
 						case '{':	rps = SUBST; qStart = pi
+						case '.':
+							repl := "[^\\n]"
+							line = line[:pi] + repl + line[pi + 1:]
+							pi += len(repl) - 1
+						case '$':
+							repl := "\\n"
+							line = line[:pi] + repl + line[pi + 1:]
+							pi += len(repl) - 1
 						}
 					case CLASS:
 						if line[pi] == ']' {
