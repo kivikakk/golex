@@ -1,0 +1,1 @@
+ * The '$' special character in regular expressions is sometimes counted towards the perceived length of a match (where it matches a \n, and where the '$' itself is not the last character of the regular expression; this last clause is only here because of a HACK to make that (hopefully most common) case less problematic).

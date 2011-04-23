@@ -126,7 +126,7 @@ func parse(data []byte, out io.Writer) {
 					var yyout io.Writer = os.Stdout
 					type yyrule struct {
 						regexp *regexp.Regexp
-						lenAdj int
+						lenAdj bool
 						action func(yytext string)
 					}
 					var yyrules []yyrule = []yyrule{`))
@@ -197,7 +197,7 @@ func parse(data []byte, out io.Writer) {
 							line = line[:pi] + repl + line[pi + 1:]
 							pi += len(repl) - 1
 						case '$':
-							repl := "\\n"
+							repl := "($|\\n)"
 							line = line[:pi] + repl + line[pi + 1:]
 							pi += len(repl) - 1
 							lenAdj = pi
@@ -246,13 +246,12 @@ func parse(data []byte, out io.Writer) {
 					out.Write([]byte(",\n"))
 				}
 
+				doLenAdj := "false"
 				if lenAdj == pi - 1 {
-					lenAdj = 1
-				} else {
-					lenAdj = 0
+					doLenAdj = "true"
 				}
 
-				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(%s), %d, func(yytext string) {\n", quotedPattern, lenAdj)))
+				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(%s), %s, func(yytext string) {\n", quotedPattern, doLenAdj)))
 
 				lastPattern = strings.TrimSpace(line[pi:])
 
@@ -315,7 +314,11 @@ func parse(data []byte, out io.Writer) {
 				for _, v := range yyrules {
 					idxs := v.regexp.FindStringIndex(data)
 					if idxs != nil && idxs[0] == 0 {
-						adjLen := idxs[1] - v.lenAdj
+						adjLen := idxs[1]
+						if v.lenAdj && idxs[1] > 0 && data[idxs[1]-1] == '\n' {
+							adjLen -= 1
+						}
+
 						if adjLen > longestMatchLen {
 							longestMatch, longestMatchLen = v.action, adjLen
 						}
