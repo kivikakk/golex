@@ -126,6 +126,7 @@ func parse(data []byte, out io.Writer) {
 					var yyout io.Writer = os.Stdout
 					type yyrule struct {
 						regexp *regexp.Regexp
+						lenAdj int
 						action func(yytext string)
 					}
 					var yyrules []yyrule = []yyrule{`))
@@ -176,6 +177,7 @@ func parse(data []byte, out io.Writer) {
 				// Work out what the actual pattern is.
 				pi, rps := 0, ROOT
 				qStart := 0
+				lenAdj := -1
 
 				for ; pi < len(line); pi++ {
 					if line[pi] == '\\' {
@@ -198,6 +200,7 @@ func parse(data []byte, out io.Writer) {
 							repl := "\\n"
 							line = line[:pi] + repl + line[pi + 1:]
 							pi += len(repl) - 1
+							lenAdj = pi
 						}
 					case CLASS:
 						if line[pi] == ']' {
@@ -234,6 +237,7 @@ func parse(data []byte, out io.Writer) {
 				quotedPattern := line[:pi]
 				quotedPattern = strings.Replace(quotedPattern, "\\", "\\\\", -1)
 				quotedPattern = strings.Replace(quotedPattern, "\"", "\\\"", -1)
+
 				quotedPattern = "\"" + quotedPattern + "\""
 
 				if firstPattern {
@@ -242,7 +246,13 @@ func parse(data []byte, out io.Writer) {
 					out.Write([]byte(",\n"))
 				}
 
-				out.Write([]byte("{regexp.MustCompile(" + quotedPattern + "), func(yytext string) {\n"))
+				if lenAdj == pi - 1 {
+					lenAdj = 1
+				} else {
+					lenAdj = 0
+				}
+
+				out.Write([]byte(fmt.Sprintf("{regexp.MustCompile(%s), %d, func(yytext string) {\n", quotedPattern, lenAdj)))
 
 				lastPattern = strings.TrimSpace(line[pi:])
 
@@ -305,8 +315,9 @@ func parse(data []byte, out io.Writer) {
 				for _, v := range yyrules {
 					idxs := v.regexp.FindStringIndex(data)
 					if idxs != nil && idxs[0] == 0 {
-						if idxs[1] > longestMatchLen {
-							longestMatch, longestMatchLen = v.action, idxs[1]
+						adjLen := idxs[1] - v.lenAdj
+						if adjLen > longestMatchLen {
+							longestMatch, longestMatchLen = v.action, adjLen
 						}
 					}
 				}
