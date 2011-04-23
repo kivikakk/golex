@@ -230,7 +230,7 @@ func parse(data []byte, out io.Writer) {
 								trailingContextStart = pi
 								// line[pi+1:] should be empty anyway.
 								line = line[:pi] + "/\\n|$" + line[pi+1:]
-								pi += 6 - 1
+								pi += 5 - 1
 							}
 						}
 					case CLASS:
@@ -352,11 +352,28 @@ func parse(data []byte, out io.Writer) {
 
 			for len(yydata) > 0 {
 				longestMatch, longestMatchLen := (func() int)(nil), -1
+				longestAdvLen := -1
+
 				for _, v := range yyrules {
 					idxs := v.regexp.FindStringIndex(yydata)
 					if idxs != nil && idxs[0] == 0 {
-						if idxs[1] > longestMatchLen {
-							longestMatch, longestMatchLen = v.action, idxs[1]
+						// Check the trailing context, if any.
+						checksOk := true
+						matchLen := idxs[1]
+						subMatchLen := idxs[1]
+
+						if v.trailing != nil {
+							tridxs := v.trailing.FindStringIndex(yydata[idxs[1]:])
+							if tridxs == nil || tridxs[0] != 0 {
+								checksOk = false
+							} else {
+								matchLen += tridxs[1]
+							}
+						}
+
+						if checksOk && matchLen > longestMatchLen {
+							longestMatch, longestMatchLen = v.action, matchLen
+							longestAdvLen = subMatchLen
 						}
 					}
 				}
@@ -371,8 +388,8 @@ func parse(data []byte, out io.Writer) {
 
 					yyout.Write([]byte(yytext))
 				} else {
-					yytext += yydata[:longestMatchLen]
-					yydata = yydata[longestMatchLen:]
+					yytext += yydata[:longestAdvLen]
+					yydata = yydata[longestAdvLen:]
 
 					yyactionreturn, yytextrepl = true, true
 					rv := longestMatch()
