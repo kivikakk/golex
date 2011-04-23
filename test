@@ -1,7 +1,7 @@
 #!/bin/bash
 make
-./golex test.l
-cat test.l.go
-6g test.l.go
-6l test.l.6
+./golex $1
+cat $1.go
+6g $1.go
+6l $1.6
 ./6.out

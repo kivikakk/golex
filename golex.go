@@ -122,7 +122,7 @@ func parse(data []byte, out io.Writer) {
 						"os"
 					)
 
-					var yyin io.Reader
+					var yyin io.Reader = os.Stdin
 					var yyout io.Writer = os.Stdout
 					type yyrule struct {
 						regexp *regexp.Regexp
@@ -175,10 +175,9 @@ func parse(data []byte, out io.Writer) {
 			case ACTIONS:
 				// Work out what the actual pattern is.
 				pi, rps := 0, ROOT
-				ll := len(line)
 				qStart := 0
 
-				for ; pi < ll; pi++ {
+				for ; pi < len(line); pi++ {
 					if line[pi] == '\\' {
 						pi++
 						continue

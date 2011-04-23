@@ -46,7 +46,6 @@ if|then|begin|end|procedure|function	{
 %%
 
 func main() {
-	yyin = os.Stdin
 	yylex()
 }
 
