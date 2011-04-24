@@ -1,0 +1,290 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"bufio"
+	"strings"
+)
+
+type Parser struct {
+	state     stateFunc
+	out       *bufio.Writer
+
+	inComment bool
+	wroteEnd  bool
+
+	parseSubs map[string]string
+	firstPat  bool
+	lastPat   string
+}
+
+func NewParser(out io.Writer) *Parser {
+	return &Parser{state:     (*Parser).statePrologue,
+	               out:       bufio.NewWriter(out),
+		       inComment: false,
+		       wroteEnd:  false,
+		       parseSubs: make(map[string]string),
+		       firstPat:  true,
+		       lastPat:   ""}
+}
+
+func (p *Parser) ParseInput(in io.Reader) {
+	buffer := bufio.NewReader(in)
+
+	for {
+		line, err := buffer.ReadString('\n')
+
+		if len(line) == 0 && err != nil {
+			break
+		} else if len(strings.TrimSpace(line)) == 0 {
+			continue
+		}
+
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			line = line[:len(line)-1]
+		}
+
+		p.state(p, line)
+	}
+
+	p.ParseFinish()
+}
+
+func (p *Parser) ParseFinish() {
+	if !p.wroteEnd {
+		p.out.WriteString("}\n")
+	}
+
+	p.out.WriteString(`
+		var yydata string = ""
+		var yyactionreturn bool = false
+
+		var yytext string = ""
+		var yytextrepl bool = true
+		func yymore() {
+			yytextrepl = false
+		}
+
+		func yylex() int {
+			reader := bufio.NewReader(yyin)
+
+			for {
+				line, err := reader.ReadString('\n')
+				if len(line) == 0 && err == os.EOF {
+					break
+				}
+
+				yydata += line
+			}
+
+			for len(yydata) > 0 {
+				longestMatch, longestMatchLen := (func() int)(nil), -1
+				longestAdvLen := -1
+
+				for _, v := range yyrules {
+					idxs := v.regexp.FindStringIndex(yydata)
+					if idxs != nil && idxs[0] == 0 {
+						// Check the trailing context, if any.
+						checksOk := true
+						matchLen := idxs[1]
+						subMatchLen := idxs[1]
+
+						if v.trailing != nil {
+							tridxs := v.trailing.FindStringIndex(yydata[idxs[1]:])
+							if tridxs == nil || tridxs[0] != 0 {
+								checksOk = false
+							} else {
+								matchLen += tridxs[1]
+							}
+						}
+
+						if checksOk && matchLen > longestMatchLen {
+							longestMatch, longestMatchLen = v.action, matchLen
+							longestAdvLen = subMatchLen
+						}
+					}
+				}
+
+				if yytextrepl {
+					yytext = ""
+				}
+
+				if longestMatch == nil {
+					yytext += yydata[:1]
+					yydata = yydata[1:]
+
+					yyout.Write([]byte(yytext))
+				} else {
+					yytext += yydata[:longestAdvLen]
+					yydata = yydata[longestAdvLen:]
+
+					yyactionreturn, yytextrepl = true, true
+					rv := longestMatch()
+
+					if yyactionreturn {
+						return rv
+					}
+				}
+			}
+
+			return 0
+		}
+`)
+
+	p.out.Flush()
+}
+
+func (p *Parser) trimComments(line string) string {
+	if !p.inComment {
+		idx := strings.Index(line, "/*")
+		if idx != -1 {
+			p.inComment = true
+			trimmed := p.trimComments(line[idx:])
+			return line[:idx] + trimmed
+		}
+		return line
+	}
+
+	// In comment.
+	idx := strings.Index(line, "*/")
+
+	if idx == -1 {
+		p.inComment = true
+		return ""
+	}
+
+	p.inComment = false
+	return p.trimComments(line[idx+2:])
+}
+
+// functions to handle each state
+
+type stateFunc func(p *Parser, line string)
+
+func (p *Parser) statePrologue(line string) {
+	if line == "%%" {
+		p.state = (*Parser).stateActions
+
+		p.out.WriteString(`
+			import (
+				"regexp"
+				"io"
+				"bufio"
+				"os"
+			)
+
+			var yyin io.Reader = os.Stdin
+			var yyout io.Writer = os.Stdout
+			type yyrule struct {
+				regexp   *regexp.Regexp
+				trailing *regexp.Regexp
+				action   func() int
+			}
+			var yyrules []yyrule = []yyrule{`)
+		return
+	}
+
+	line = p.trimComments(line)
+
+	if len(strings.TrimSpace(line)) == 0 {
+		return
+	}
+
+	if line == "%{" {
+		p.state = (*Parser).statePrologueLit
+		return
+	}
+
+	if line[0] == ' ' || line[0] == '\t' {
+		p.out.WriteString(strings.TrimSpace(line) + "\n")
+	} else {
+		firstSpace := strings.Index(line, " ")
+		firstTab := strings.Index(line, "\t")
+		if firstSpace == -1 && firstTab == -1 {
+			panic(fmt.Sprintf("don't know what to do with line \"%s\" in PROLOGUE", line))
+		}
+
+		smaller := firstSpace
+		if smaller == -1 {
+			smaller = firstTab
+		}
+		if firstTab != -1 && firstTab < smaller {
+			smaller = firstTab
+		}
+
+		p.parseSubs[line[:smaller]] = strings.TrimSpace(line[smaller:])
+	}
+}
+
+func (p *Parser) statePrologueLit(line string) {
+	if line == "%}" {
+		p.state = (*Parser).statePrologue
+	} else {
+		p.out.WriteString(line + "\n")
+	}
+}
+
+func (p *Parser) stateActions(line string) {
+	if line == "%%" {
+		p.state = (*Parser).stateEpilogue
+		p.wroteEnd = true
+		p.out.WriteString("}\n")
+		return
+	}
+
+	quotedPattern, trailingContext, remainder := p.ParseFlex(line)
+
+	if trailingContext != "" {
+		trailingContext = strings.Replace(trailingContext, "\\", "\\\\", -1)
+		trailingContext = strings.Replace(trailingContext, "\"", "\\\"", -1)
+		trailingContext = fmt.Sprintf("regexp.MustCompile(\"%s\")", trailingContext)
+	} else {
+		trailingContext = "nil"
+	}
+
+	quotedPattern = strings.Replace(quotedPattern, "\\", "\\\\", -1)
+	quotedPattern = strings.Replace(quotedPattern, "\"", "\\\"", -1)
+
+	if p.firstPat {
+		p.firstPat = false
+	} else {
+		p.out.WriteString(",\n")
+	}
+
+	p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, func() int {\n", quotedPattern, trailingContext))
+
+	p.lastPat = strings.TrimSpace(remainder)
+
+	if len(p.lastPat) > 0 {
+		if p.lastPat[0] == '{' {
+			if p.lastPat[len(p.lastPat)-1] == '}' {
+				p.lastPat = p.lastPat[:len(p.lastPat)-1]
+			} else {
+				p.state = (*Parser).stateActionsCont
+			}
+
+			p.lastPat = p.lastPat[1:]
+		}
+	}
+
+	if p.state == (*Parser).stateActions {
+		p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")
+	}
+}
+
+func (p *Parser) stateActionsCont(line string) {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) > 0 && trimmed[len(trimmed)-1] == '}' {
+		p.lastPat = strings.TrimSpace(p.lastPat + line)
+		p.lastPat = p.lastPat[:len(p.lastPat)-1]
+		p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")
+		p.state = (*Parser).stateActions
+	} else {
+		p.lastPat += line + "\n"
+	}
+}
+
+func (p *Parser) stateEpilogue(line string) {
+	p.out.WriteString(line + "\n")
+}
