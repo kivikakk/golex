@@ -67,6 +67,8 @@ func (p *Parser) ParseFinish() {
 
 	p.out.WriteString(`
 var yydata string = ""
+var yyorig string
+var yyorigidx int
 
 var yytext string = ""
 var yytextrepl bool = true
@@ -82,8 +84,15 @@ func yyREJECT() {
 	panic("yyREJECT")
 }
 
-func yyless(n int) { }
-func unput(c uint8) { }
+var yylessed int
+func yyless(n int) {
+	yylessed = len(yytext) - n
+}
+
+func unput(c uint8) {
+	yyorig = yyorig[:yyorigidx] + string(c) + yyorig[yyorigidx:]
+	yydata = yydata[:len(yytext)-yylessed] + string(c) + yydata[len(yytext)-yylessed:]
+}
 
 type yylexMatch struct {
 	matchFunc func() yyactionreturn
@@ -117,14 +126,14 @@ func yylex() int {
 		yydata += line
 	}
 
-	origData := yydata
-	dataIndex := 0
+	yyorig = yydata
+	yyorigidx = 0
 
 	for len(yydata) > 0 {
 		matches := yylexMatchList(make([]yylexMatch, 0, 6))
 		
 		for _, v := range yyrules {
-			sol := dataIndex == 0 || origData[dataIndex-1] == '\n'
+			sol := yyorigidx == 0 || yyorig[yyorigidx-1] == '\n'
 
 			if v.sol && !sol {
 				continue
@@ -162,19 +171,20 @@ func yylex() int {
 		if len(matches) == 0 {
 			yytext += yydata[:1]
 			yydata = yydata[1:]
-			dataIndex += 1
+			yyorigidx += 1
 
 			yyout.Write([]byte(yytext))
 		} else {
 			m := matches[0]
 			yytext += yydata[:m.advLen]
-			dataIndex += m.advLen
+			yyorigidx += m.advLen
 
-			yytextrepl = true
+			yytextrepl, yylessed = true, 0
 			ar := m.matchFunc()
 
 			if ar.returnType != yyRT_REJECT {
-				yydata = yydata[m.advLen:]
+				yydata = yydata[m.advLen-yylessed:]
+				yyorigidx -= yylessed
 			}
 
 			switch ar.returnType {
@@ -185,7 +195,7 @@ func yylex() int {
 			case yyRT_REJECT:
 				matches = matches[1:]
 				yytext = yytext[:len(yytext)-m.advLen]
-				dataIndex -= m.advLen
+				yyorigidx -= m.advLen
 				goto tryMatch
 			}
 		}
