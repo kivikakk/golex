@@ -20,12 +20,20 @@ type Parser struct {
 
 	inComment bool
 	wroteEnd  bool
-	activeAcc string
+	actionAcc string
 
 	parseSubs map[string]string
 	firstPat  bool
 	lastPat   string
 	patStack  *list.List
+
+	scNext    int
+	scList    map[string]startCondition
+}
+
+type startCondition struct {
+	num  int
+	excl bool
 }
 
 func NewParser(out io.Writer) *Parser {
@@ -33,11 +41,13 @@ func NewParser(out io.Writer) *Parser {
 		out:       bufio.NewWriter(out),
 		inComment: false,
 		wroteEnd:  false,
-		activeAcc: "",
+		actionAcc: "",
 		parseSubs: make(map[string]string),
 		firstPat:  true,
 		lastPat:   "",
-		patStack:  list.New()}
+		patStack:  list.New(),
+		scNext:    1024,
+		scList:    make(map[string]startCondition)}
 }
 
 func (p *Parser) ParseInput(in io.Reader) {
@@ -78,7 +88,7 @@ func yymore() {
 	yytextrepl = false
 }
 
-func yyBEGIN(state int) {
+func yyBEGIN(state yystartcondition) {
 	panic("TODO: yyBEGIN()")
 }
 
@@ -111,8 +121,9 @@ func input() int {
 }
 
 var EOF int = -1
-var INITIAL int = 0
-var YY_START int = INITIAL
+type yystartcondition int
+var INITIAL yystartcondition = 0
+var YY_START yystartcondition = INITIAL
 
 type yylexMatch struct {
 	matchFunc func() yyactionreturn
@@ -149,8 +160,8 @@ func yylex() int {
 	yyorig = yydata
 	yyorigidx = 0
 
-	func(BEGIN func(int)) {
-		`+p.activeAcc+`
+	func(BEGIN func(yystartcondition)) {
+		`+p.actionAcc+`
 	}(yyBEGIN)
 
 	for len(yydata) > 0 {
@@ -366,7 +377,7 @@ type stateFunc func(p *Parser, line string)
 func (p *Parser) statePrologue(line string) {
 	if line == "%%" {
 		p.state = (*Parser).stateActions
-		p.activeAcc = ""
+		p.actionAcc = ""
 
 		p.out.WriteString(`
 import (
@@ -398,8 +409,13 @@ const (
 	yyRT_USER_RETURN
 	yyRT_REJECT
 )
+`)
+	
+	for k, v := range p.scList {
+		p.out.WriteString(fmt.Sprintf("var %s yystartcondition = %d\n", k, v.num))
+	}
 
-var yyrules []yyrule = []yyrule{`)
+	p.out.WriteString(`var yyrules []yyrule = []yyrule{`)
 		return
 	}
 
@@ -431,7 +447,27 @@ var yyrules []yyrule = []yyrule{`)
 			smaller = firstTab
 		}
 
-		p.parseSubs[line[:smaller]] = strings.TrimSpace(line[smaller:])
+		key, val := line[:smaller], line[smaller:]
+
+		// Is this an option, or substitution rule?
+		if key[0] == '%' {
+			switch key {
+			case "%s", "%x":
+				// Start conditions.
+				conds := strings.Split(val, " ", -1)
+				for _, v := range conds {
+					v = strings.TrimSpace(v)
+					if len(v) == 0 {
+						continue
+					}
+
+					p.scList[v] = startCondition{p.scNext, key == "%x"}
+					p.scNext++
+				}
+			}
+		} else {
+			p.parseSubs[key] = strings.TrimSpace(val)
+		}
 	}
 }
 
@@ -452,7 +488,7 @@ func (p *Parser) stateActions(line string) {
 	}
 
 	if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
-		p.activeAcc += line + "\n"
+		p.actionAcc += line + "\n"
 		return
 	}
 

@@ -2,7 +2,7 @@
 %%
 
 foobar	ECHO; yyless(3)
-[a-z]+	ECHO
+[a-z]+	{ ECHO }
 
 456	{
 		unput(')')
