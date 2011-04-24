@@ -61,79 +61,91 @@ func (p *Parser) ParseFinish() {
 	}
 
 	p.out.WriteString(`
-		var yydata string = ""
-		var yyactionreturn bool = false
+var yydata string = ""
+var yyactionreturn bool = false
 
-		var yytext string = ""
-		var yytextrepl bool = true
-		func yymore() {
-			yytextrepl = false
+var yytext string = ""
+var yytextrepl bool = true
+func yymore() {
+	yytextrepl = false
+}
+
+func yylex() int {
+	reader := bufio.NewReader(yyin)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) == 0 && err == os.EOF {
+			break
 		}
 
-		func yylex() int {
-			reader := bufio.NewReader(yyin)
+		yydata += line
+	}
 
-			for {
-				line, err := reader.ReadString('\n')
-				if len(line) == 0 && err == os.EOF {
-					break
-				}
+	origData := yydata
+	dataIndex := 0
 
-				yydata += line
+	for len(yydata) > 0 {
+		longestMatch, longestMatchLen := (func() int)(nil), -1
+		longestAdvLen := -1
+
+		for _, v := range yyrules {
+			sol := dataIndex == 0 || origData[dataIndex-1] == '\n'
+
+			// I want a real XOR! :(
+			if v.sol && !sol {
+				continue
 			}
 
-			for len(yydata) > 0 {
-				longestMatch, longestMatchLen := (func() int)(nil), -1
-				longestAdvLen := -1
+			idxs := v.regexp.FindStringIndex(yydata)
+			if idxs != nil && idxs[0] == 0 {
+				// Check the trailing context, if any.
+				checksOk := true
+				matchLen := idxs[1]
+				subMatchLen := idxs[1]
 
-				for _, v := range yyrules {
-					idxs := v.regexp.FindStringIndex(yydata)
-					if idxs != nil && idxs[0] == 0 {
-						// Check the trailing context, if any.
-						checksOk := true
-						matchLen := idxs[1]
-						subMatchLen := idxs[1]
-
-						if v.trailing != nil {
-							tridxs := v.trailing.FindStringIndex(yydata[idxs[1]:])
-							if tridxs == nil || tridxs[0] != 0 {
-								checksOk = false
-							} else {
-								matchLen += tridxs[1]
-							}
-						}
-
-						if checksOk && matchLen > longestMatchLen {
-							longestMatch, longestMatchLen = v.action, matchLen
-							longestAdvLen = subMatchLen
-						}
+				if v.trailing != nil {
+					tridxs := v.trailing.FindStringIndex(yydata[idxs[1]:])
+					if tridxs == nil || tridxs[0] != 0 {
+						checksOk = false
+					} else {
+						matchLen += tridxs[1]
 					}
 				}
 
-				if yytextrepl {
-					yytext = ""
-				}
-
-				if longestMatch == nil {
-					yytext += yydata[:1]
-					yydata = yydata[1:]
-
-					yyout.Write([]byte(yytext))
-				} else {
-					yytext += yydata[:longestAdvLen]
-					yydata = yydata[longestAdvLen:]
-
-					yyactionreturn, yytextrepl = true, true
-					rv := longestMatch()
-
-					if yyactionreturn {
-						return rv
-					}
+				if checksOk && matchLen > longestMatchLen {
+					longestMatch, longestMatchLen = v.action, matchLen
+					longestAdvLen = subMatchLen
 				}
 			}
-
-			return 0
 		}
+
+		if yytextrepl {
+			yytext = ""
+		}
+
+		if longestMatch == nil {
+			yytext += yydata[:1]
+			yydata = yydata[1:]
+			dataIndex += 1
+
+			yyout.Write([]byte(yytext))
+		} else {
+			yytext += yydata[:longestAdvLen]
+			yydata = yydata[longestAdvLen:]
+			dataIndex += longestAdvLen
+
+			yyactionreturn, yytextrepl = true, true
+			rv := longestMatch()
+
+			if yyactionreturn {
+				return rv
+			}
+		}
+	}
+
+	return 0
+}
 `)
 
 	p.out.Flush()
@@ -213,6 +225,7 @@ func (p *Parser) statePrologue(line string) {
 			type yyrule struct {
 				regexp   *regexp.Regexp
 				trailing *regexp.Regexp
+				sol      bool
 				action   func() int
 			}
 			var yyrules []yyrule = []yyrule{`)
@@ -306,7 +319,12 @@ func (p *Parser) stateActions(line string) {
 
 		saved := e.Value.([]string)
 
-		p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, func() int {\n", saved[0], saved[1]))
+		sol := "false"
+		if len(saved[0]) > 0 && saved[0][0] == '^' {
+			sol = "true"
+		}
+
+		p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, %s, func() int {\n", saved[0], saved[1], sol))
 
 		if p.state == (*Parser).stateActions {
 			p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")

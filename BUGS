@@ -1,8 +1,5 @@
-BUGS
- * '^' matches everywhere.
-
 TODO
- * ECHO, REJECT, '|', BEGIN (start conditions)
+ * ECHO, REJECT, BEGIN (start conditions)
  * yyless, yymore, unput, (yy)input
  * [a-f]{+}[q-z]
  * [a-z]{-}[c-x]
