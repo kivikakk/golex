@@ -86,11 +86,11 @@ func (fp *flexParser) stateRoot() bool {
 			fp.i += 5 - 1
 		}
 	case '(':
-		if len(fp.line) > fp.i + 3 && fp.line[fp.i+1 : fp.i+3] == "?#" {
+		if len(fp.line) > fp.i+3 && fp.line[fp.i+1:fp.i+3] == "?#" {
 			// Regular expression comment.
 			end := strings.Index(fp.line[fp.i:], ")")
 			fp.line = fp.line[:fp.i] + fp.line[end+fp.i+1:]
-			fp.i--;
+			fp.i--
 		}
 	}
 	return false
@@ -136,4 +136,3 @@ func (fp *flexParser) stateSubst() bool {
 	fp.stateFunc = (*flexParser).stateRoot
 	return false
 }
-
