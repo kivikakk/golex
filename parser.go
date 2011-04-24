@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"strings"
 	"regexp"
+	"container/list"
 )
 
 type Parser struct {
@@ -18,6 +19,7 @@ type Parser struct {
 	parseSubs map[string]string
 	firstPat  bool
 	lastPat   string
+	patStack  *list.List
 }
 
 func NewParser(out io.Writer) *Parser {
@@ -27,7 +29,8 @@ func NewParser(out io.Writer) *Parser {
 		       wroteEnd:  false,
 		       parseSubs: make(map[string]string),
 		       firstPat:  true,
-		       lastPat:   ""}
+		       lastPat:   "",
+		       patStack:  list.New()}
 }
 
 func (p *Parser) ParseInput(in io.Reader) {
@@ -274,14 +277,6 @@ func (p *Parser) stateActions(line string) {
 
 	quotedPattern = quoteRegexp(quotedPattern)
 
-	if p.firstPat {
-		p.firstPat = false
-	} else {
-		p.out.WriteString(",\n")
-	}
-
-	p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, func() int {\n", quotedPattern, trailingContext))
-
 	p.lastPat = strings.TrimSpace(remainder)
 
 	if len(p.lastPat) > 0 {
@@ -296,8 +291,28 @@ func (p *Parser) stateActions(line string) {
 		}
 	}
 
-	if p.state == (*Parser).stateActions {
-		p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")
+	p.patStack.PushFront([]string{quotedPattern, trailingContext})
+
+	if p.lastPat == "|" {
+		return
+	}
+
+	for e := p.patStack.Front(); e != nil; e = p.patStack.Front() {
+		if p.firstPat {
+			p.firstPat = false
+		} else {
+			p.out.WriteString(",\n")
+		}
+
+		saved := e.Value.([]string)
+
+		p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, func() int {\n", saved[0], saved[1]))
+
+		if p.state == (*Parser).stateActions {
+			p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")
+		}
+
+		p.patStack.Remove(e)
 	}
 }
 
