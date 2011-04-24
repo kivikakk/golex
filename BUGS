@@ -16,4 +16,3 @@ TODO
 
 CHECK
  * (?:isx-isx:maybe not) (regex options)
- * (?# comment)

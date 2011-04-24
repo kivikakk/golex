@@ -10,7 +10,7 @@
 \x0d	fmt.Printf("(got x0d)")
 \123	fmt.Printf("(got S \\123)")
 \133	fmt.Printf("(got [ \\133)")
-\x2a	fmt.Printf("(got * \\x2a)")
+\x(?# This is a regexp comment.)2a	fmt.Printf("(got * \\x2a)")
 
 %%
 func main() {

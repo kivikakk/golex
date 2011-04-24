@@ -164,6 +164,8 @@ var (
 	nulEscape  *regexp.Regexp = regexp.MustCompile("\\\\\\\\0($|[^0-9]|[0-9][^0-9])")
 )
 
+// quoteRegexp prepares a regular expression for insertion into a Go source
+// as a string suitable for use as argument to regexp.(Must)?Compile.
 func quoteRegexp(re string) string {
 	re = strings.Replace(re, "\\", "\\\\", -1)
 	re = strings.Replace(re, "\"", "\\\"", -1)
