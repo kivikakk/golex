@@ -7,6 +7,11 @@ import (
 	"strings"
 	"regexp"
 	"container/list"
+	goparser "go/parser"
+	gotoken "go/token"
+	goast "go/ast"
+	goprinter "go/printer"
+	"bytes"
 )
 
 type Parser struct {
@@ -204,6 +209,37 @@ func quoteRegexp(re string) string {
 	return re
 }
 
+type codeToActionVisitor struct { }
+func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
+	exprs, ok := node.(*goast.ExprStmt)
+	if ok {
+		rid, rok := exprs.X.(*goast.Ident)
+		if rok {
+			rid.Name = "yy" + rid.Name
+			exprs.X = &goast.CallExpr{Fun: exprs.X,
+						  Args: nil}
+		}
+	}
+
+	return ctav
+}
+
+func codeToAction(code string) string {
+	fs := gotoken.NewFileSet()
+
+	expr, _ := goparser.ParseExpr(fs, "", "func() int {" + code + "; yyactionreturn = false; return 0}")
+
+	fexp := expr.(*goast.FuncLit)
+
+	ctav := &codeToActionVisitor{}
+	goast.Walk(ctav, fexp)
+
+	result := bytes.NewBuffer(make([]byte, 0, len(code) * 2))
+	goprinter.Fprint(result, fs, fexp)
+
+	return result.String()
+}
+
 // functions to handle each state
 
 type stateFunc func(p *Parser, line string)
@@ -324,10 +360,11 @@ func (p *Parser) stateActions(line string) {
 			sol = "true"
 		}
 
-		p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, %s, func() int {\n", saved[0], saved[1], sol))
+		p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, %s, \n", saved[0], saved[1], sol))
 
 		if p.state == (*Parser).stateActions {
-			p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")
+			p.out.WriteString(codeToAction(p.lastPat))
+			p.out.WriteString("}")
 		}
 
 		p.patStack.Remove(e)
@@ -349,3 +386,4 @@ func (p *Parser) stateActionsCont(line string) {
 func (p *Parser) stateEpilogue(line string) {
 	p.out.WriteString(line + "\n")
 }
+

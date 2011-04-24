@@ -1,6 +1,6 @@
 TODO
  * ECHO, REJECT, BEGIN (start conditions)
- * yyless, yymore, unput, (yy)input
+ * yyless, unput, (yy)input
  * [a-f]{+}[q-z]
  * [a-z]{-}[c-x]
  * a{3,5} -> (aaa(a(a)?)?)
