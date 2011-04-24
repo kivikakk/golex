@@ -1,6 +1,5 @@
 TODO
  * BEGIN (start conditions)
- * (yy)input
  * [a-f]{+}[q-z]
  * [a-z]{-}[c-x]
  * a{3,5} -> (aaa(a(a)?)?)

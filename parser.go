@@ -94,6 +94,18 @@ func unput(c uint8) {
 	yydata = yydata[:len(yytext)-yylessed] + string(c) + yydata[len(yytext)-yylessed:]
 }
 
+func input() int {
+	if len(yyorig) <= yyorigidx {
+		return EOF
+	}
+	c := yyorig[yyorigidx]
+	yyorig = yyorig[:yyorigidx] + yyorig[yyorigidx+1:]
+	yydata = yydata[:len(yytext)-yylessed] + yydata[len(yytext)-yylessed+1:]
+	return int(c)
+}
+
+var EOF int = -1
+
 type yylexMatch struct {
 	matchFunc func() yyactionreturn
 	sortLen   int
