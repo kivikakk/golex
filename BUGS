@@ -15,8 +15,5 @@ TODO
  * [:^XYZ:] is allowable. (how? what is its meaning in mixed input? e.g. [[:^lower:]X-Z])
 
 CHECK
- * \0 -> NUL
- * \123 -> char 0123 (octal)
- * \x2a -> char 2a (hex)
  * (?:isx-isx:maybe not) (regex options)
  * (?# comment)

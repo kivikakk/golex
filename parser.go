@@ -5,6 +5,7 @@ import (
 	"io"
 	"bufio"
 	"strings"
+	"regexp"
 )
 
 type Parser struct {
@@ -158,6 +159,34 @@ func (p *Parser) trimComments(line string) string {
 	return p.trimComments(line[idx+2:])
 }
 
+var (
+	hexOrOctal *regexp.Regexp = regexp.MustCompile("\\\\\\\\([0-9][0-9][0-9]|[xX][0-9a-fA-F][0-9a-fA-F])")
+	nulEscape  *regexp.Regexp = regexp.MustCompile("\\\\\\\\0($|[^0-9]|[0-9][^0-9])")
+)
+
+func quoteRegexp(re string) string {
+	re = strings.Replace(re, "\\", "\\\\", -1)
+	re = strings.Replace(re, "\"", "\\\"", -1)
+	re = hexOrOctal.ReplaceAllStringFunc(re, func(s string) string {
+		var n int
+		fmt.Sscan("0" + s[2:], &n)
+
+		if n < 32 {
+			s = fmt.Sprintf("\\x%02x", n)
+		} else {
+			s = string(n)
+			s = strings.Replace(regexp.QuoteMeta(s), "\\", "\\\\", -1)
+		}
+
+		return s
+	})
+	re = nulEscape.ReplaceAllStringFunc(re, func(s string) string {
+		s = "\\x00" + s[3:]
+		return s
+	})
+	return re
+}
+
 // functions to handle each state
 
 type stateFunc func(p *Parser, line string)
@@ -236,15 +265,12 @@ func (p *Parser) stateActions(line string) {
 	quotedPattern, trailingContext, remainder := p.ParseFlex(line)
 
 	if trailingContext != "" {
-		trailingContext = strings.Replace(trailingContext, "\\", "\\\\", -1)
-		trailingContext = strings.Replace(trailingContext, "\"", "\\\"", -1)
-		trailingContext = fmt.Sprintf("regexp.MustCompile(\"%s\")", trailingContext)
+		trailingContext = fmt.Sprintf("regexp.MustCompile(\"%s\")", quoteRegexp(trailingContext))
 	} else {
 		trailingContext = "nil"
 	}
 
-	quotedPattern = strings.Replace(quotedPattern, "\\", "\\\\", -1)
-	quotedPattern = strings.Replace(quotedPattern, "\"", "\\\"", -1)
+	quotedPattern = quoteRegexp(quotedPattern)
 
 	if p.firstPat {
 		p.firstPat = false
