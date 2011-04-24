@@ -67,12 +67,42 @@ func (p *Parser) ParseFinish() {
 
 	p.out.WriteString(`
 var yydata string = ""
-var yyactionreturn bool = false
 
 var yytext string = ""
 var yytextrepl bool = true
 func yymore() {
 	yytextrepl = false
+}
+
+func yyECHO() {
+	yyout.Write([]byte(yytext))
+}
+
+func yyREJECT() {
+	panic("yyREJECT")
+}
+
+func yyless(n int) { }
+func unput(c uint8) { }
+
+type yylexMatch struct {
+	matchFunc func() yyactionreturn
+	sortLen   int
+	advLen    int
+}
+
+type yylexMatchList []yylexMatch
+
+func (ml yylexMatchList) Len() int {
+	return len(ml)
+}
+
+func (ml yylexMatchList) Less(i, j int) bool {
+	return ml[i].sortLen > ml[j].sortLen
+}
+
+func (ml yylexMatchList) Swap(i, j int) {
+	ml[i], ml[j] = ml[j], ml[i]
 }
 
 func yylex() int {
@@ -91,13 +121,11 @@ func yylex() int {
 	dataIndex := 0
 
 	for len(yydata) > 0 {
-		longestMatch, longestMatchLen := (func() int)(nil), -1
-		longestAdvLen := -1
-
+		matches := yylexMatchList(make([]yylexMatch, 0, 6))
+		
 		for _, v := range yyrules {
 			sol := dataIndex == 0 || origData[dataIndex-1] == '\n'
 
-			// I want a real XOR! :(
 			if v.sol && !sol {
 				continue
 			}
@@ -106,21 +134,20 @@ func yylex() int {
 			if idxs != nil && idxs[0] == 0 {
 				// Check the trailing context, if any.
 				checksOk := true
-				matchLen := idxs[1]
-				subMatchLen := idxs[1]
+				sortLen := idxs[1]
+				advLen := idxs[1]
 
 				if v.trailing != nil {
 					tridxs := v.trailing.FindStringIndex(yydata[idxs[1]:])
 					if tridxs == nil || tridxs[0] != 0 {
 						checksOk = false
 					} else {
-						matchLen += tridxs[1]
+						sortLen += tridxs[1]
 					}
 				}
 
-				if checksOk && matchLen > longestMatchLen {
-					longestMatch, longestMatchLen = v.action, matchLen
-					longestAdvLen = subMatchLen
+				if checksOk {
+					matches = append(matches, yylexMatch{v.action, sortLen, advLen})
 				}
 			}
 		}
@@ -129,22 +156,37 @@ func yylex() int {
 			yytext = ""
 		}
 
-		if longestMatch == nil {
+		sort.Sort(matches)
+
+	tryMatch:
+		if len(matches) == 0 {
 			yytext += yydata[:1]
 			yydata = yydata[1:]
 			dataIndex += 1
 
 			yyout.Write([]byte(yytext))
 		} else {
-			yytext += yydata[:longestAdvLen]
-			yydata = yydata[longestAdvLen:]
-			dataIndex += longestAdvLen
+			m := matches[0]
+			yytext += yydata[:m.advLen]
+			dataIndex += m.advLen
 
-			yyactionreturn, yytextrepl = true, true
-			rv := longestMatch()
+			yytextrepl = true
+			ar := m.matchFunc()
 
-			if yyactionreturn {
-				return rv
+			if ar.returnType != yyRT_REJECT {
+				yydata = yydata[m.advLen:]
+			}
+
+			switch ar.returnType {
+			case yyRT_FALLTHROUGH:
+				// Do nothing.
+			case yyRT_USER_RETURN:
+				return ar.userReturn
+			case yyRT_REJECT:
+				matches = matches[1:]
+				yytext = yytext[:len(yytext)-m.advLen]
+				dataIndex -= m.advLen
+				goto tryMatch
 			}
 		}
 	}
@@ -222,6 +264,24 @@ func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
 			exprs.X = &goast.CallExpr{Fun: exprs.X,
 				Args: nil}
 		}
+
+		return ctav
+	}
+
+	// Transform 'return 1' into 'return yyactionreturn{1, yyRT_USER_RETURN}'. Take special
+	// effort not to touch existing 'return yyactionreturn{...}' statements.
+	retstmt, ok := node.(*goast.ReturnStmt)
+	if ok {
+		if len(retstmt.Results) == 1 {
+			r := retstmt.Results[0]
+			_, ok := r.(*goast.CompositeLit)
+
+			if !ok {
+				// Wrap it.
+				retstmt.Results[0] = &goast.CompositeLit{Type: &goast.Ident{Name: "yyactionreturn"},
+									 Elts: []goast.Expr{r, &goast.Ident{Name: "yyRT_USER_RETURN"}}}
+			}
+		}
 	}
 
 	return ctav
@@ -230,7 +290,20 @@ func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
 func codeToAction(code string) string {
 	fs := gotoken.NewFileSet()
 
-	expr, _ := goparser.ParseExpr(fs, "", "func() int {"+code+"; yyactionreturn = false; return 0}")
+	expr, _ := goparser.ParseExpr(fs, "", `
+func() (yyar yyactionreturn) {
+	defer func() {
+		if r := recover(); r != nil {
+			if r != "yyREJECT" {
+				panic(r)
+			}
+			yyar.returnType = yyRT_REJECT
+		}
+	}()
+		
+	`+code+`;
+	return yyactionreturn{0, yyRT_FALLTHROUGH}
+}`)
 
 	fexp := expr.(*goast.FuncLit)
 
@@ -252,22 +325,37 @@ func (p *Parser) statePrologue(line string) {
 		p.state = (*Parser).stateActions
 
 		p.out.WriteString(`
-			import (
-				"regexp"
-				"io"
-				"bufio"
-				"os"
-			)
+import (
+	"regexp"
+	"io"
+	"bufio"
+	"os"
+	"sort"
+)
 
-			var yyin io.Reader = os.Stdin
-			var yyout io.Writer = os.Stdout
-			type yyrule struct {
-				regexp   *regexp.Regexp
-				trailing *regexp.Regexp
-				sol      bool
-				action   func() int
-			}
-			var yyrules []yyrule = []yyrule{`)
+var yyin io.Reader = os.Stdin
+var yyout io.Writer = os.Stdout
+
+type yyrule struct {
+	regexp   *regexp.Regexp
+	trailing *regexp.Regexp
+	sol      bool
+	action   func() yyactionreturn
+}
+
+type yyactionreturn struct {
+	userReturn int
+	returnType yyactionreturntype
+}
+
+type yyactionreturntype int
+const (
+	yyRT_FALLTHROUGH yyactionreturntype = iota
+	yyRT_USER_RETURN
+	yyRT_REJECT
+)
+
+var yyrules []yyrule = []yyrule{`)
 		return
 	}
 
