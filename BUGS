@@ -9,6 +9,7 @@ TODO
  * <<EOF>>
  * [:alnum:] [:alpha:] [:blank:] [:cntrl:] [:digit:] [:graph:] [:lower:] [:print:] [:punct:] [:space:] [:upper:] [:xdigit:]  (correspond to C isXXX() fns - foudn WITHIN char classes, i.e. [[:blank:][:digit]])
  * [:^XYZ:] is allowable. (how? what is its meaning in mixed input? e.g. [[:^lower:]X-Z])
+ * YYINPUT, yyterminate(), yyrestart, yywrap (%option noyywrap), YY_FLUSH_BUFFER(?)
 
 CHECK
  * (?:isx-isx:maybe not) (regex options)

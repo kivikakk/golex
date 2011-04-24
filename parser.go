@@ -20,6 +20,7 @@ type Parser struct {
 
 	inComment bool
 	wroteEnd  bool
+	activeAcc string
 
 	parseSubs map[string]string
 	firstPat  bool
@@ -32,6 +33,7 @@ func NewParser(out io.Writer) *Parser {
 		out:       bufio.NewWriter(out),
 		inComment: false,
 		wroteEnd:  false,
+		activeAcc: "",
 		parseSubs: make(map[string]string),
 		firstPat:  true,
 		lastPat:   "",
@@ -76,6 +78,10 @@ func yymore() {
 	yytextrepl = false
 }
 
+func yyBEGIN(state int) {
+	panic("TODO: yyBEGIN()")
+}
+
 func yyECHO() {
 	yyout.Write([]byte(yytext))
 }
@@ -105,6 +111,8 @@ func input() int {
 }
 
 var EOF int = -1
+var INITIAL int = 0
+var YY_START int = INITIAL
 
 type yylexMatch struct {
 	matchFunc func() yyactionreturn
@@ -140,6 +148,10 @@ func yylex() int {
 
 	yyorig = yydata
 	yyorigidx = 0
+
+	func(BEGIN func(int)) {
+		`+p.activeAcc+`
+	}(yyBEGIN)
 
 	for len(yydata) > 0 {
 		matches := yylexMatchList(make([]yylexMatch, 0, 6))
@@ -276,19 +288,28 @@ func quoteRegexp(re string) string {
 type codeToActionVisitor struct{}
 
 func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
-	// Transforms any lone expression statements where the expression is a lone ident
-	// to a call of that name prefixed with yy (i.e. 'ECHO' -> 'yyECHO()').
 	exprs, ok := node.(*goast.ExprStmt)
 	if ok {
+		// Transform ECHO, REJECT to yyECHO(), yyREJECT().
 		rid, rok := exprs.X.(*goast.Ident)
-		if rok {
+		if rok && (rid.Name == "ECHO" || rid.Name == "REJECT") {
 			rid.Name = "yy" + rid.Name
 			exprs.X = &goast.CallExpr{Fun: exprs.X,
 				Args: nil}
 		}
 
+		// Transform BEGIN(...) into yyBEGIN(...).
+		rcall, rok := exprs.X.(*goast.CallExpr)
+		if rok {
+			rident, rok := rcall.Fun.(*goast.Ident)
+			if rok && rident.Name == "BEGIN" {
+				rident.Name = "yyBEGIN"
+			}
+		}
+
 		return ctav
 	}
+
 
 	// Transform 'return 1' into 'return yyactionreturn{1, yyRT_USER_RETURN}'. Take special
 	// effort not to touch existing 'return yyactionreturn{...}' statements.
@@ -345,6 +366,7 @@ type stateFunc func(p *Parser, line string)
 func (p *Parser) statePrologue(line string) {
 	if line == "%%" {
 		p.state = (*Parser).stateActions
+		p.activeAcc = ""
 
 		p.out.WriteString(`
 import (
@@ -429,6 +451,11 @@ func (p *Parser) stateActions(line string) {
 		return
 	}
 
+	if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+		p.activeAcc += line + "\n"
+		return
+	}
+
 	quotedPattern, trailingContext, remainder := p.ParseFlex(line)
 
 	if trailingContext != "" {
@@ -485,18 +512,22 @@ func (p *Parser) stateActions(line string) {
 }
 
 func (p *Parser) stateActionsCont(line string) {
-	trimmed := strings.TrimSpace(line)
-	if len(trimmed) > 0 && trimmed[len(trimmed)-1] == '}' {
-		p.lastPat = strings.TrimSpace(p.lastPat + line)
-		p.lastPat = p.lastPat[:len(p.lastPat)-1]
+	if len(line) > 0 && line[0] != ' ' && line[0] != '\t' {
+		// This is another action (or otherwise).
+		p.lastPat = strings.TrimSpace(p.lastPat)
+		if p.lastPat[len(p.lastPat)-1] != '}' {
+			panic("multi-line action didn't end in '}'")
+		}
 
+		p.lastPat = p.lastPat[:len(p.lastPat)-1]
 		p.out.WriteString(codeToAction(p.lastPat))
 		p.out.WriteString("}")
-
 		p.state = (*Parser).stateActions
-	} else {
-		p.lastPat += line + "\n"
+		p.state(p, line)
+		return
 	}
+
+	p.lastPat += line + "\n"
 }
 
 func (p *Parser) stateEpilogue(line string) {
