@@ -211,6 +211,8 @@ func quoteRegexp(re string) string {
 
 type codeToActionVisitor struct { }
 func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
+	// Transforms any lone expression statements where the expression is a lone ident
+	// to a call of that name prefixed with yy (i.e. 'ECHO' -> 'yyECHO()').
 	exprs, ok := node.(*goast.ExprStmt)
 	if ok {
 		rid, rok := exprs.X.(*goast.Ident)
@@ -376,7 +378,10 @@ func (p *Parser) stateActionsCont(line string) {
 	if len(trimmed) > 0 && trimmed[len(trimmed)-1] == '}' {
 		p.lastPat = strings.TrimSpace(p.lastPat + line)
 		p.lastPat = p.lastPat[:len(p.lastPat)-1]
-		p.out.WriteString(p.lastPat + "\nyyactionreturn = false; return 0}}")
+
+		p.out.WriteString(codeToAction(p.lastPat))
+		p.out.WriteString("}")
+
 		p.state = (*Parser).stateActions
 	} else {
 		p.lastPat += line + "\n"
