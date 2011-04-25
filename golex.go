@@ -26,8 +26,8 @@ func main() {
 
 	out, _ := os.Create(flag.Arg(0) + ".go")
 
-	p := NewParser(out)
-	p.ParseInput(f)
+	lf := ParseLexFile(f)
+	lf.WriteGo(out)
 
 	out.Close()
 
