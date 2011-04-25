@@ -21,8 +21,9 @@ a	ECHO
 
 <incl,excl>wut ECHO
 <*>haa ECHO
+<INITIAL,excl>sump ECHO
 
-.	/* munch */
+<*>.	/* munch */
 
 %%
 func main() {
