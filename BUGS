@@ -11,3 +11,8 @@ TODO
  * [:^XYZ:] is allowable. (how? what is its meaning in mixed input? e.g. [[:^lower:]X-Z])
  * YYINPUT, yyterminate(), yyrestart, yywrap (%option noyywrap), YY_FLUSH_BUFFER(?)
  * (?:isx-isx:some lovely pattern)
+ * %{, %} before patterns in rules section (same as indented code beforehand)
+ * %{, %} to wrap action code block (instead of {, })
+
+WONTFIX
+ * %top (our code goes to the top anyway, otherwise the package definition would surely fail)
