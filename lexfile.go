@@ -17,9 +17,9 @@ type LexFile struct {
 
 	prologue string
 
-	actionInline string
+	actionInline    string
 	startConditions map[string]LexStartCondition
-	rules []LexRule
+	rules           []LexRule
 
 	epilogue string
 }
@@ -31,14 +31,14 @@ type LexStartCondition struct {
 
 type LexRule struct {
 	startConditions []string
-	pattern string
+	pattern         string
 	trailingPattern string
-	code string
+	code            string
 }
 
 func NewLexFile() *LexFile {
 	return &LexFile{startConditions: make(map[string]LexStartCondition),
-	                rules:           make([]LexRule, 0, 15)}
+		rules: make([]LexRule, 0, 15)}
 }
 
 type outf struct {
@@ -48,7 +48,7 @@ type outf struct {
 func (w outf) W(s string) {
 	w.Write([]byte(s))
 }
-func (w outf) Wf(s string, args...interface{}) {
+func (w outf) Wf(s string, args ...interface{}) {
 	w.W(fmt.Sprintf(s, args...))
 }
 
@@ -88,7 +88,7 @@ func (lf *LexFile) WriteGo(out io.Writer) {
 			}
 		}
 		w.W("}, ")
-		
+
 		if v.pattern[0] == '^' {
 			w.W("true, ")
 		} else {
@@ -141,7 +141,7 @@ func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
 			if !ok {
 				// Wrap it.
 				retstmt.Results[0] = &goast.CompositeLit{Type: &goast.Ident{Name: "yyactionreturn"},
-									 Elts: []goast.Expr{r, &goast.Ident{Name: "yyRT_USER_RETURN"}}}
+					Elts: []goast.Expr{r, &goast.Ident{Name: "yyRT_USER_RETURN"}}}
 			}
 		}
 	}

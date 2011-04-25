@@ -22,7 +22,7 @@ func (p *Parser) ParseFlex(line string) (startConds []string, expr string, trail
 
 	if fp.line[0] == '<' {
 		sce := strings.Index(fp.line, ">")
-		scs := fp.line[1 : sce]
+		scs := fp.line[1:sce]
 		startConds = strings.Split(scs, ",", -1)
 		fp.line = fp.line[sce+1:]
 	} else {

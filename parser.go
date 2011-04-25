@@ -17,9 +17,9 @@ type Parser struct {
 	parseSubs map[string]string
 	patStack  *list.List
 
-	scNext    int
+	scNext int
 
-	res	         *LexFile
+	res              *LexFile
 	curRule          LexRule
 	curAction        string
 	appendNextAction bool
@@ -33,13 +33,13 @@ func ParseLexFile(in io.Reader) *LexFile {
 
 func NewParser() *Parser {
 	return &Parser{state: (*Parser).statePrologue,
-		seenPackage: false,
-		inComment:   false,
-		parseSubs:   make(map[string]string),
-		patStack:    list.New(),
-		scNext:      1024,
-		res:	     NewLexFile(),
-		curAction:     "",
+		seenPackage:      false,
+		inComment:        false,
+		parseSubs:        make(map[string]string),
+		patStack:         list.New(),
+		scNext:           1024,
+		res:              NewLexFile(),
+		curAction:        "",
 		appendNextAction: false}
 }
 
@@ -204,8 +204,8 @@ func (p *Parser) stateActions(line string) {
 
 	startConditions, pattern, trailingPattern, remainder := p.ParseFlex(line)
 	p.curRule = LexRule{startConditions: startConditions,
-	                    pattern: pattern,
-			    trailingPattern: trailingPattern}
+		pattern:         pattern,
+		trailingPattern: trailingPattern}
 
 	p.curAction = strings.TrimSpace(remainder)
 

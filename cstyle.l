@@ -15,8 +15,7 @@
 
 <str>\n		panic("unterminated string constant")
 
-	/* TODO: <str>\\[0-7]{1,3}	{ */
-<str>\\[0-7]([0-7][0-7]?)?	{
+<str>\\[0-7]{1,3}	{ 
 			/* octal escape sequence */
 			var result int
 			fmt.Sscanf(yytext[1:], "%o", &result)
