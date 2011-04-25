@@ -18,9 +18,10 @@ type Parser struct {
 	state stateFunc
 	out   *bufio.Writer
 
-	inComment bool
-	wroteEnd  bool
-	actionAcc string
+	seenPackage bool
+	inComment   bool
+	wroteEnd    bool
+	actionAcc   string
 
 	parseSubs map[string]string
 	lastPat   string
@@ -45,15 +46,16 @@ func (p *Parser) Writef(format string, args...interface{}) {
 
 func NewParser(out io.Writer) *Parser {
 	return &Parser{state: (*Parser).statePrologue,
-		out:       bufio.NewWriter(out),
-		inComment: false,
-		wroteEnd:  false,
-		actionAcc: "",
-		parseSubs: make(map[string]string),
-		lastPat:   "",
-		patStack:  list.New(),
-		scNext:    1024,
-		scList:    make(map[string]startCondition)}
+		out:         bufio.NewWriter(out),
+		seenPackage: false,
+		inComment:   false,
+		wroteEnd:    false,
+		actionAcc:   "",
+		parseSubs:   make(map[string]string),
+		lastPat:     "",
+		patStack:    list.New(),
+		scNext:      1024,
+		scList:      make(map[string]startCondition)}
 }
 
 func (p *Parser) ParseInput(in io.Reader) {
@@ -80,10 +82,10 @@ func (p *Parser) ParseInput(in io.Reader) {
 
 func (p *Parser) ParseFinish() {
 	if !p.wroteEnd {
-		p.out.WriteString("}\n")
+		p.Write("}\n")
 	}
 
-	p.out.WriteString(`
+	p.Write(`
 var yydata string = ""
 var yyorig string
 var yyorigidx int
@@ -399,24 +401,39 @@ func() (yyar yyactionreturn) {
 	return result.String()
 }
 
-// functions to handle each state
+func lineWasPackage(line string) bool {
+	line = strings.TrimSpace(line)
+	if len(line) > 8 && line[:8] == "package " {
+		return true
+	}
+	return false
+}
 
-type stateFunc func(p *Parser, line string)
-
-func (p *Parser) statePrologue(line string) {
-	if line == "%%" {
-		p.state = (*Parser).stateActions
-		p.actionAcc = ""
-
-		p.out.WriteString(`
-import (
+func imports() string {
+	return `import (
 	"regexp"
 	"io"
 	"bufio"
 	"os"
 	"sort"
 )
+`
+}
 
+// functions to handle each state
+
+type stateFunc func(p *Parser, line string)
+
+func (p *Parser) statePrologue(line string) {
+	if line == "%%" {
+		if !p.seenPackage {
+			panic("no package statement seen")
+		}
+
+		p.state = (*Parser).stateActions
+		p.actionAcc = ""
+
+		p.Write(`
 var yyin io.Reader = os.Stdin
 var yyout io.Writer = os.Stdout
 
@@ -451,7 +468,7 @@ const (
 			p.Writef("%s: %v, ", k, v.excl)
 		}
 
-		p.out.WriteString(`}
+		p.Write(`}
 var yyrules []yyrule = []yyrule{`)
 		return
 	}
@@ -468,7 +485,11 @@ var yyrules []yyrule = []yyrule{`)
 	}
 
 	if line[0] == ' ' || line[0] == '\t' {
-		p.out.WriteString(strings.TrimSpace(line) + "\n")
+		p.Write(strings.TrimSpace(line) + "\n")
+		if !p.seenPackage && lineWasPackage(line) {
+			p.Write(imports())
+			p.seenPackage = true
+		}
 	} else {
 		firstSpace := strings.Index(line, " ")
 		firstTab := strings.Index(line, "\t")
@@ -512,7 +533,12 @@ func (p *Parser) statePrologueLit(line string) {
 	if line == "%}" {
 		p.state = (*Parser).statePrologue
 	} else {
-		p.out.WriteString(line + "\n")
+		p.Write(line + "\n")
+		
+		if !p.seenPackage && lineWasPackage(line) {
+			p.Write(imports())
+			p.seenPackage = true
+		}
 	}
 }
 
@@ -520,7 +546,7 @@ func (p *Parser) stateActions(line string) {
 	if line == "%%" {
 		p.state = (*Parser).stateEpilogue
 		p.wroteEnd = true
-		p.out.WriteString("}\n")
+		p.Write("}\n")
 		return
 	}
 
@@ -584,13 +610,13 @@ func (p *Parser) stateActions(line string) {
 		}
 		scs += "}"
 
-		p.out.WriteString(fmt.Sprintf(
+		p.Writef(
 			"{regexp.MustCompile(\"%s\"), %s, %s, %s, \n",
-			saved[0], saved[1], scs, sol))
+			saved[0], saved[1], scs, sol)
 
 		if p.state == (*Parser).stateActions {
-			p.out.WriteString(codeToAction(p.lastPat))
-			p.out.WriteString("},")
+			p.Write(codeToAction(p.lastPat))
+			p.Write("},")
 		}
 
 		p.patStack.Remove(e)
@@ -606,8 +632,8 @@ func (p *Parser) stateActionsCont(line string) {
 		}
 
 		p.lastPat = p.lastPat[:len(p.lastPat)-1]
-		p.out.WriteString(codeToAction(p.lastPat))
-		p.out.WriteString("},")
+		p.Write(codeToAction(p.lastPat))
+		p.Write("},")
 		p.state = (*Parser).stateActions
 		p.state(p, line)
 		return
@@ -617,5 +643,5 @@ func (p *Parser) stateActionsCont(line string) {
 }
 
 func (p *Parser) stateEpilogue(line string) {
-	p.out.WriteString(line + "\n")
+	p.Write(line + "\n")
 }
