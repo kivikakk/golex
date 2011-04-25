@@ -152,7 +152,7 @@ func (ctav *codeToActionVisitor) Visit(node goast.Node) goast.Visitor {
 func codeToAction(code string) string {
 	fs := gotoken.NewFileSet()
 
-	expr, _ := goparser.ParseExpr(fs, "", `
+	newCode := `
 func() (yyar yyactionreturn) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -165,7 +165,9 @@ func() (yyar yyactionreturn) {
 		
 	`+code+`;
 	return yyactionreturn{0, yyRT_FALLTHROUGH}
-}`)
+}`
+
+	expr, _ := goparser.ParseExpr(fs, "", newCode)
 
 	fexp := expr.(*goast.FuncLit)
 

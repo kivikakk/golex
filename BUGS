@@ -2,10 +2,6 @@ TODO
  * start condition scope
  * [a-f]{+}[q-z]
  * [a-z]{-}[c-x]
- * a{3,5} -> (aaa(a(a)?)?)
- * a{2,} -> (aa+)
- * a{4} -> aaaa
- * <s>r, <s1,s2,s3>r, <*>r
  * <<EOF>>
  * [:alnum:] [:alpha:] [:blank:] [:cntrl:] [:digit:] [:graph:] [:lower:] [:print:] [:punct:] [:space:] [:upper:] [:xdigit:]  (correspond to C isXXX() fns - foudn WITHIN char classes, i.e. [[:blank:][:digit]])
  * [:^XYZ:] is allowable. (how? what is its meaning in mixed input? e.g. [[:^lower:]X-Z])

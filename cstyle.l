@@ -36,5 +36,6 @@
 <str>\\(.|\n)	string_buf += yytext[1:2]
 
 <str>[^\\\n\"]+	string_buf += yytext
+
 %%
 func main() { yylex() }
