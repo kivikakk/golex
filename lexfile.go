@@ -163,7 +163,7 @@ func() (yyar yyactionreturn) {
 		}
 	}()
 		
-	`+code+`;
+	` + code + `;
 	return yyactionreturn{0, yyRT_FALLTHROUGH}
 }`
 
