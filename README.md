@@ -18,13 +18,13 @@ _golex_ supports all features for regular expression matching as described in [f
  * regular expression option setting `(?is-x:pattern)`
  * matching EOF `<<EOF>>`
 
-The above restrictions are intended to be removed in future releases of _golex_ (except, probably the regular expression option setting, as we're actually just using Go's built-in regular expressions for matching. the level of parsing required to allow such options is possibly above me).
+The above restrictions are intended to be removed in future releases of _golex_.
 
-A number of utility functions required for full flex emulation (mostly concerning manipulating the buffer [stack]) are also not yet available.
+A number of utility functions required for full flex emulation (mostly concerning manipulating the buffer (stack)) are also not yet available.
 
 The full set of omissions (in regular expressions and otherwise) is detailed in the file `BUGS`.
 
-_golex_, and the scanners it generates, are _not_ fast (unlike flex).
+_golex_ and the scanners it generates are _not_ fast (unlike those of flex).
 
 ## examples
 
@@ -38,7 +38,9 @@ The binary `6.out` is now your scanner.
 
 ## other golexen
 
-This is not the first attempt at writing a _golex_ utility, though it might be the first with the aim of behaving as similarly to the original flex as possible. Other golexen include (but are not limited to):
+This is not the first attempt at writing a _golex_ utility, though it might be the first with the aim of behaving as similarly to the original flex as possible.
+
+Other golexen include (but are not limited to):
 
  * [Ben Lynn](http://cs.stanford.edu/~blynn/)'s [Nex](http://cs.stanford.edu/~blynn/nex/) tool.
  * [CZ.NIC](http://www.nic.cz)'s [lex](git://git.nic.cz/go/lex) package.
