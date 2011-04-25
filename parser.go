@@ -23,7 +23,6 @@ type Parser struct {
 	actionAcc string
 
 	parseSubs map[string]string
-	firstPat  bool
 	lastPat   string
 	patStack  *list.List
 
@@ -36,6 +35,14 @@ type startCondition struct {
 	excl bool
 }
 
+func (p *Parser) Write(s string) {
+	p.out.WriteString(s)
+}
+
+func (p *Parser) Writef(format string, args...interface{}) {
+	p.out.WriteString(fmt.Sprintf(format, args...))
+}
+
 func NewParser(out io.Writer) *Parser {
 	return &Parser{state: (*Parser).statePrologue,
 		out:       bufio.NewWriter(out),
@@ -43,7 +50,6 @@ func NewParser(out io.Writer) *Parser {
 		wroteEnd:  false,
 		actionAcc: "",
 		parseSubs: make(map[string]string),
-		firstPat:  true,
 		lastPat:   "",
 		patStack:  list.New(),
 		scNext:    1024,
@@ -89,7 +95,7 @@ func yymore() {
 }
 
 func yyBEGIN(state yystartcondition) {
-	panic("TODO: yyBEGIN()")
+	YY_START = state
 }
 
 func yyECHO() {
@@ -166,11 +172,34 @@ func yylex() int {
 
 	for len(yydata) > 0 {
 		matches := yylexMatchList(make([]yylexMatch, 0, 6))
-		
+		excl := yystartconditionexclmap[YY_START]
+
 		for _, v := range yyrules {
 			sol := yyorigidx == 0 || yyorig[yyorigidx-1] == '\n'
 
 			if v.sol && !sol {
+				continue
+			}
+
+			// Check start conditions.
+			ok := false
+
+			// YY_START or '*' must feature in v.startConds
+			for _, c := range v.startConds {
+				if c == YY_START || c == -1 {
+					ok = true
+					break
+				}
+			}
+
+			if !excl {
+				// If v.startConds is empty, this is also acceptable.
+				if len(v.startConds) == 0 {
+					ok = true
+				}
+			}
+
+			if !ok {
 				continue
 			}
 
@@ -392,10 +421,11 @@ var yyin io.Reader = os.Stdin
 var yyout io.Writer = os.Stdout
 
 type yyrule struct {
-	regexp   *regexp.Regexp
-	trailing *regexp.Regexp
-	sol      bool
-	action   func() yyactionreturn
+	regexp     *regexp.Regexp
+	trailing   *regexp.Regexp
+	startConds []yystartcondition
+	sol        bool
+	action     func() yyactionreturn
 }
 
 type yyactionreturn struct {
@@ -410,12 +440,19 @@ const (
 	yyRT_REJECT
 )
 `)
-	
-	for k, v := range p.scList {
-		p.out.WriteString(fmt.Sprintf("var %s yystartcondition = %d\n", k, v.num))
-	}
+		
+		for k, v := range p.scList {
+			p.Writef("var %s yystartcondition = %d\n", k, v.num)
+		}
 
-	p.out.WriteString(`var yyrules []yyrule = []yyrule{`)
+		p.Write(`var yystartconditionexclmap = map[yystartcondition]bool{`)
+
+		for k, v := range p.scList {
+			p.Writef("%s: %v, ", k, v.excl)
+		}
+
+		p.out.WriteString(`}
+var yyrules []yyrule = []yyrule{`)
 		return
 	}
 
@@ -492,7 +529,7 @@ func (p *Parser) stateActions(line string) {
 		return
 	}
 
-	quotedPattern, trailingContext, remainder := p.ParseFlex(line)
+	startConds, quotedPattern, trailingContext, remainder := p.ParseFlex(line)
 
 	if trailingContext != "" {
 		trailingContext = fmt.Sprintf("regexp.MustCompile(\"%s\")", quoteRegexp(trailingContext))
@@ -523,12 +560,6 @@ func (p *Parser) stateActions(line string) {
 	}
 
 	for e := p.patStack.Front(); e != nil; e = p.patStack.Front() {
-		if p.firstPat {
-			p.firstPat = false
-		} else {
-			p.out.WriteString(",\n")
-		}
-
 		saved := e.Value.([]string)
 
 		sol := "false"
@@ -536,11 +567,30 @@ func (p *Parser) stateActions(line string) {
 			sol = "true"
 		}
 
-		p.out.WriteString(fmt.Sprintf("{regexp.MustCompile(\"%s\"), %s, %s, \n", saved[0], saved[1], sol))
+		scs := "[]yystartcondition{"
+		firstSc := true
+		for _, v := range startConds {
+			if firstSc {
+				firstSc = false
+			} else {
+				scs += ", "
+			}
+
+			if v == "*" {
+				scs += "-1"
+			} else {
+				scs += v
+			}
+		}
+		scs += "}"
+
+		p.out.WriteString(fmt.Sprintf(
+			"{regexp.MustCompile(\"%s\"), %s, %s, %s, \n",
+			saved[0], saved[1], scs, sol))
 
 		if p.state == (*Parser).stateActions {
 			p.out.WriteString(codeToAction(p.lastPat))
-			p.out.WriteString("}")
+			p.out.WriteString("},")
 		}
 
 		p.patStack.Remove(e)
@@ -557,7 +607,7 @@ func (p *Parser) stateActionsCont(line string) {
 
 		p.lastPat = p.lastPat[:len(p.lastPat)-1]
 		p.out.WriteString(codeToAction(p.lastPat))
-		p.out.WriteString("}")
+		p.out.WriteString("},")
 		p.state = (*Parser).stateActions
 		p.state(p, line)
 		return

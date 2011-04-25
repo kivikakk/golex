@@ -17,8 +17,17 @@ type flexParser struct {
 	tcStart   int
 }
 
-func (p *Parser) ParseFlex(line string) (expr string, trailing string, remainder string) {
+func (p *Parser) ParseFlex(line string) (startConds []string, expr string, trailing string, remainder string) {
 	fp := &flexParser{p, line, 0, (*flexParser).stateRoot, 0, -1}
+
+	if fp.line[0] == '<' {
+		sce := strings.Index(fp.line, ">")
+		scs := fp.line[1 : sce]
+		startConds = strings.Split(scs, ",", -1)
+		fp.line = fp.line[sce+1:]
+	} else {
+		startConds = []string{}
+	}
 
 	for ; fp.i < len(fp.line); fp.i++ {
 		if fp.line[fp.i] == '\\' {

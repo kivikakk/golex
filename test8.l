@@ -1,9 +1,11 @@
 	package main
 
+
 %s incl
 %x excl
 %%
 
+	var enter_excl = false
 	if enter_excl {
 		BEGIN(excl)
 	}
@@ -16,6 +18,11 @@ a	ECHO
 <incl>B	ECHO; BEGIN(INITIAL)
 <excl>c	ECHO
 <excl>C	ECHO; BEGIN(INITIAL)
+
+<incl,excl>wut ECHO
+<*>haa ECHO
+
+.	/* munch */
 
 %%
 func main() {
