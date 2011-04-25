@@ -291,6 +291,7 @@ var INITIAL yystartcondition = 0
 var YY_START yystartcondition = INITIAL
 
 type yylexMatch struct {
+	index	  int
 	matchFunc func() yyactionreturn
 	sortLen   int
 	advLen    int
@@ -303,7 +304,7 @@ func (ml yylexMatchList) Len() int {
 }
 
 func (ml yylexMatchList) Less(i, j int) bool {
-	return ml[i].sortLen > ml[j].sortLen
+	return ml[i].sortLen > ml[j].sortLen && ml[i].index > ml[j].index
 }
 
 func (ml yylexMatchList) Swap(i, j int) {
@@ -331,7 +332,7 @@ func yylex() int {
 		matches := yylexMatchList(make([]yylexMatch, 0, 6))
 		excl := yystartconditionexclmap[YY_START]
 
-		for _, v := range yyrules {
+		for i, v := range yyrules {
 			sol := yyorigidx == 0 || yyorig[yyorigidx-1] == '\n'
 
 			if v.sol && !sol {
@@ -377,7 +378,7 @@ func yylex() int {
 				}
 
 				if checksOk {
-					matches = append(matches, yylexMatch{v.action, sortLen, advLen})
+					matches = append(matches, yylexMatch{i, v.action, sortLen, advLen})
 				}
 			}
 		}
