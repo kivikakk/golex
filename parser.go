@@ -61,6 +61,11 @@ func (p *Parser) ParseInput(in io.Reader) {
 
 		p.state(p, line)
 	}
+
+	if p.state == (*Parser).stateActions {
+		// Insert an artificial '%%' to ensure the last rule is written.
+		p.state(p, "%%")
+	}
 }
 
 func (p *Parser) trimComments(line string) string {
