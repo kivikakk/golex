@@ -9,4 +9,6 @@ GOFILES=\
 	regexp.go\
 	lexfile.go\
 
+CLEANFILES += *.l.go 
+
 include $(GOROOT)/src/Make.cmd

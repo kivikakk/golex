@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	goparser "go/parser"
 	gotoken "go/token"
@@ -72,6 +73,11 @@ func (lf *LexFile) WriteGo(out io.Writer) {
 
 	w.W(`var yyrules []yyrule = []yyrule{`)
 	for _, v := range lf.rules {
+		m := regexp.MustCompile(v.pattern).FindStringSubmatch("")
+		if m != nil {
+			fmt.Fprintf(os.Stdout, "WARNING: pattern /%s/ matches empty string \"\"\n", v.pattern)
+		}
+
 		w.Wf("{regexp.MustCompile(\"%s\"), ", quoteRegexp(v.pattern))
 		if tp := v.trailingPattern; tp != "" {
 			w.Wf("regexp.MustCompile(\"%s\"), ", quoteRegexp(tp))
