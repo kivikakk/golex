@@ -187,15 +187,25 @@ func() (yyar yyactionreturn) {
 }
 
 var (
+	nulEscape  *regexp.Regexp = regexp.MustCompile("\\\\\\\\0($|[^0-9xX]|[0-9xX]$|[0-9xX][^0-9a-fA-F]|[0-9xX][0-9a-fA-F]$|[0-9xX][0-9a-fA-F][^0-9a-fA-F])")
 	hexOrOctal *regexp.Regexp = regexp.MustCompile("\\\\\\\\([0-9][0-9][0-9]|[xX][0-9a-fA-F][0-9a-fA-F])")
-	nulEscape  *regexp.Regexp = regexp.MustCompile("\\\\\\\\0($|[^0-9]|[0-9][^0-9])")
 )
 
 // quoteRegexp prepares a regular expression for insertion into a Go source
 // as a string suitable for use as argument to regexp.(Must)?Compile.
 func quoteRegexp(re string) string {
+	// TODO XXX This needs to be rewritten as a lexer(!)-style apparatus
+	// rather than with regular expressions, as a the conversions of \0, \\0, etc. fail.
+	fmt.Fprintf(os.Stderr, "01: RE is %s\n", re)
 	re = strings.Replace(re, "\\", "\\\\", -1)
+	fmt.Fprintf(os.Stderr, "02: RE is %s\n", re)
 	re = strings.Replace(re, "\"", "\\\"", -1)
+	fmt.Fprintf(os.Stderr, "03: RE is %s\n", re)
+	re = nulEscape.ReplaceAllStringFunc(re, func(s string) string {
+		s = "\\x00" + s[3:]
+		return s
+	})
+	fmt.Fprintf(os.Stderr, "04: RE is %s\n", re)
 	re = hexOrOctal.ReplaceAllStringFunc(re, func(s string) string {
 		var n int
 		fmt.Sscan("0"+s[2:], &n)
@@ -209,10 +219,7 @@ func quoteRegexp(re string) string {
 
 		return s
 	})
-	re = nulEscape.ReplaceAllStringFunc(re, func(s string) string {
-		s = "\\x00" + s[3:]
-		return s
-	})
+	fmt.Fprintf(os.Stderr, "05: RE is %s\n", re)
 	return re
 }
 
