@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	goparser "go/parser"
 	gotoken "go/token"
@@ -251,6 +250,9 @@ func quoteRegexp(re string) (out string) {
 					// There's no valid hex sequence here.
 					out += "\\\\"
 				}
+			} else if re[i+1] == '\\' {
+				out += "\\\\\\\\"
+				skip++
 			} else {
 				out += "\\\\"
 			}
