@@ -73,14 +73,15 @@ func (lf *LexFile) WriteGo(out io.Writer) {
 
 	w.W(`var yyrules []yyrule = []yyrule{`)
 	for _, v := range lf.rules {
-		m := regexp.MustCompile(v.pattern).FindStringSubmatch("")
-		if m != nil {
-			fmt.Fprintf(os.Stdout, "WARNING: pattern /%s/ matches empty string \"\"\n", v.pattern)
-		}
+		// fmt.Fprintf(os.Stdout, "compiling __%s__\n", v.pattern)
+		// m := regexp.MustCompile(v.pattern).FindStringSubmatch("")
+		// if m != nil {
+			// fmt.Fprintf(os.Stdout, "WARNING: pattern /%s/ matches empty string \"\"\n", v.pattern)
+		// }
 
-		w.Wf("{regexp.MustCompile(\"%s\"), ", quoteRegexp(v.pattern))
+		w.Wf("{regexp.MustCompile(%s), ", quoteRegexp(v.pattern))
 		if tp := v.trailingPattern; tp != "" {
-			w.Wf("regexp.MustCompile(\"%s\"), ", quoteRegexp(tp))
+			w.Wf("regexp.MustCompile(%s), ", quoteRegexp(tp))
 		} else {
 			w.W("nil, ")
 		}
@@ -186,41 +187,80 @@ func() (yyar yyactionreturn) {
 	return result.String()
 }
 
-var (
-	nulEscape  *regexp.Regexp = regexp.MustCompile("\\\\\\\\0($|[^0-9xX]|[0-9xX]$|[0-9xX][^0-9a-fA-F]|[0-9xX][0-9a-fA-F]$|[0-9xX][0-9a-fA-F][^0-9a-fA-F])")
-	hexOrOctal *regexp.Regexp = regexp.MustCompile("\\\\\\\\([0-9][0-9][0-9]|[xX][0-9a-fA-F][0-9a-fA-F])")
-)
+func isOctalDigit(d uint8) bool {
+	return d >= '0' && d <= '7'
+}
+
+func isHexDigit(d uint8) bool {
+	return (d >= '0' && d <= '9') || (d >= 'a' && d <= 'f') || (d >= 'A' && d <= 'F')
+}
+
+func formatMetaChar(d int) string {
+	if d < 32 {
+		return fmt.Sprintf("\\x%02x", d)
+	} 
+	return strings.Replace(strings.Replace(regexp.QuoteMeta(string(d)), "\\", "\\\\", -1), "\"", "\\\"", -1)
+}
 
 // quoteRegexp prepares a regular expression for insertion into a Go source
 // as a string suitable for use as argument to regexp.(Must)?Compile.
-func quoteRegexp(re string) string {
-	// TODO XXX This needs to be rewritten as a lexer(!)-style apparatus
-	// rather than with regular expressions, as a the conversions of \0, \\0, etc. fail.
-	fmt.Fprintf(os.Stderr, "01: RE is %s\n", re)
-	re = strings.Replace(re, "\\", "\\\\", -1)
-	fmt.Fprintf(os.Stderr, "02: RE is %s\n", re)
-	re = strings.Replace(re, "\"", "\\\"", -1)
-	fmt.Fprintf(os.Stderr, "03: RE is %s\n", re)
-	re = nulEscape.ReplaceAllStringFunc(re, func(s string) string {
-		s = "\\x00" + s[3:]
-		return s
-	})
-	fmt.Fprintf(os.Stderr, "04: RE is %s\n", re)
-	re = hexOrOctal.ReplaceAllStringFunc(re, func(s string) string {
-		var n int
-		fmt.Sscan("0"+s[2:], &n)
+func quoteRegexp(re string) (out string) {
+	out = "\""
 
-		if n < 32 {
-			s = fmt.Sprintf("\\x%02x", n)
-		} else {
-			s = string(n)
-			s = strings.Replace(regexp.QuoteMeta(s), "\\", "\\\\", -1)
+	skip := 0
+	for i, c := range re {
+		if skip > 0 {
+			skip--
+			continue
 		}
 
-		return s
-	})
-	fmt.Fprintf(os.Stderr, "05: RE is %s\n", re)
-	return re
+		switch c {
+		case '"': out += "\\\""
+		case '\\':
+			if len(re) == i+1 {
+				// This is the last character.
+				out += "\\\\"
+			} else if isOctalDigit(re[i+1]) {
+				// The next character is an octal digit.
+				if len(re) >= i+4 && isOctalDigit(re[i+2]) && isOctalDigit(re[i+3]) {
+					// .. and there two more octal digits beyond that.
+					var oct int
+					fmt.Sscanf(re[i+1:i+4], "%o", &oct)
+					out += formatMetaChar(oct)
+					skip += 3
+				} else {
+					// There's no valid 3-digit octal here ..
+					if re[i+1] == '0' {
+						// .. so treat the leading \0 as a NUL.
+						out += "\\000"
+						skip++
+					} else {
+						// .. so escape the leading \.
+						out += "\\\\"
+					}
+				}
+			} else if re[i+1] == 'x' || re[i+1] == 'X' {
+				// The next character ~ [xX].
+				if len(re) >= i+4 && isHexDigit(re[i+2]) && isHexDigit(re[i+3]) {
+					// .. and there are two hex digits beyond that.
+					var hex int
+					fmt.Sscanf(re[i+2:i+4], "%x", &hex)
+					out += formatMetaChar(hex)
+					skip += 3
+				} else {
+					// There's no valid hex sequence here.
+					out += "\\\\"
+				}
+			} else {
+				out += "\\\\"
+			}
+		default: out += string(c)
+		}
+	}
+
+	out += "\""
+
+	return
 }
 
 const IMPORTS = `
