@@ -157,7 +157,7 @@ func (p *Parser) statePrologue(line string) {
 			switch key {
 			case "%s", "%x":
 				// Start conditions.
-				conds := strings.Split(val, " ", -1)
+				conds := strings.Split(val, " ")
 				for _, v := range conds {
 					v = strings.TrimSpace(v)
 					if len(v) == 0 {
