@@ -1,10 +1,9 @@
 package main
 
 import (
+	"container/list"
 	"regexp"
 	"strings"
-	"fmt"
-	"container/list"
 )
 
 // Parses flex-style regular expressions.
@@ -150,84 +149,10 @@ func (fp *flexParser) stateQuotes() bool {
 	return false
 }
 
-var substRangeRegexp = regexp.MustCompile("([0-9]*)(,)?([0-9]*)")
-
 func (fp *flexParser) stateSubst() bool {
 	if fp.line[fp.i] != '}' {
 		return false
 	}
-
-	name := fp.line[fp.qStart+1 : fp.i]
-	repl, found := fp.p.parseSubs[name]
-	if !found {
-		// Is it a range expression?
-		if ss := substRangeRegexp.FindStringSubmatch(name); ss != nil {
-			if len(ss[2]) == 0 {
-				// Simple repeat.
-				var reps int
-				fmt.Sscanf(ss[1]+ss[3], "%d", &reps)
-
-				// Repeat fp.lastElement:fp.qStart reps-1 times, omitting
-				// fp.qStart:fp.i+1
-				fp.line = fp.line[:fp.qStart] + strings.Repeat(fp.line[fp.lastElement:fp.qStart], reps-1) + fp.line[fp.i+1:]
-				fp.i += (fp.qStart-fp.lastElement)*(reps-1) - (fp.i + 1 - fp.qStart)
-			} else {
-				min, max := 0, -1
-				if len(ss[1]) != 0 {
-					fmt.Sscanf(ss[1], "%d", &min)
-				}
-				if len(ss[3]) != 0 {
-					fmt.Sscanf(ss[3], "%d", &max)
-				}
-
-				app := ""
-				if min == 0 && max == -1 {
-					app = "*"
-				} else if min == 1 && max == -1 {
-					app = "+"
-				} else if max == -1 {
-					// min > 1, max == -1
-					for i := 1; i < min; i++ {
-						app += fp.line[fp.lastElement:fp.qStart]
-					}
-					app += "+"
-				} else {
-					// max > 0
-					if max < min {
-						panic(fmt.Sprintf("invalid range count %d-%d", min, max))
-					}
-
-					if min == 0 {
-						app += "?"
-						max -= 1
-					}
-
-					for i := 1; i < min; i++ {
-						app += fp.line[fp.lastElement:fp.qStart]
-					}
-
-					for i := min; i < max; i++ {
-						app += "(" + fp.line[fp.lastElement:fp.qStart]
-					}
-
-					for i := min; i < max; i++ {
-						app += ")?"
-					}
-				}
-
-				fp.line = fp.line[:fp.qStart] + app + fp.line[fp.i+1:]
-				fp.i += len(app) - (fp.i + 1 - fp.qStart)
-			}
-
-			fp.stateFunc = (*flexParser).stateRoot
-			return false
-		} else {
-			panic(fmt.Sprintf("substitution {%s} found, but no such name!", name))
-		}
-	}
-
-	fp.line = fp.line[:fp.qStart] + "(" + repl + ")" + fp.line[fp.i+1:]
-	fp.i += 2 + len(repl) - len(name) - 2
 
 	fp.stateFunc = (*flexParser).stateRoot
 	return false

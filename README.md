@@ -14,15 +14,13 @@ _golex_ is a tool for generating scanners: programs which recognize lexical patt
 _golex_ supports all features for regular expression matching as described in [flex's manual](http://flex.sourceforge.net/manual/Patterns.html#Patterns), _except_:
 
  * character class set operations `[a-z]{-}[aeiou]`
- * character class expressions `[:alnum:]`
- * regular expression option setting `(?is-x:pattern)`
  * matching EOF `<<EOF>>`
 
 The above restrictions are intended to be removed in future releases of _golex_.
 
 A number of utility functions required for full flex emulation (mostly concerning manipulating the buffer (stack)) are also not yet available.
 
-The full set of omissions (in regular expressions and otherwise) is detailed in the file `BUGS`.
+The full set of omissions (in regular expressions and otherwise) is detailed in the GitHub Issues for this repository.
 
 _golex_ and the scanners it generates are _not_ fast (unlike those of flex).
 

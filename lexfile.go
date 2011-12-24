@@ -1,14 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	goast "go/ast"
+	goparser "go/parser"
+	goprinter "go/printer"
+	gotoken "go/token"
 	"io"
 	"regexp"
-	goparser "go/parser"
-	gotoken "go/token"
-	goast "go/ast"
-	goprinter "go/printer"
-	"bytes"
 	"strings"
 )
 
@@ -75,7 +75,7 @@ func (lf *LexFile) WriteGo(out io.Writer) {
 		// fmt.Fprintf(os.Stdout, "compiling __%s__\n", v.pattern)
 		// m := regexp.MustCompile(v.pattern).FindStringSubmatch("")
 		// if m != nil {
-			// fmt.Fprintf(os.Stdout, "WARNING: pattern /%s/ matches empty string \"\"\n", v.pattern)
+		// fmt.Fprintf(os.Stdout, "WARNING: pattern /%s/ matches empty string \"\"\n", v.pattern)
 		// }
 
 		w.Wf("{regexp.MustCompile(%s), ", quoteRegexp(v.pattern))
@@ -197,7 +197,7 @@ func isHexDigit(d uint8) bool {
 func formatMetaChar(d int) string {
 	if d < 32 {
 		return fmt.Sprintf("\\x%02x", d)
-	} 
+	}
 	return strings.Replace(strings.Replace(regexp.QuoteMeta(string(d)), "\\", "\\\\", -1), "\"", "\\\"", -1)
 }
 
@@ -214,7 +214,8 @@ func quoteRegexp(re string) (out string) {
 		}
 
 		switch c {
-		case '"': out += "\\\""
+		case '"':
+			out += "\\\""
 		case '\\':
 			if len(re) == i+1 {
 				// This is the last character.
@@ -256,7 +257,8 @@ func quoteRegexp(re string) (out string) {
 			} else {
 				out += "\\\\"
 			}
-		default: out += string(c)
+		default:
+			out += string(c)
 		}
 	}
 
@@ -267,10 +269,10 @@ func quoteRegexp(re string) (out string) {
 
 const IMPORTS = `
 import (
-	"regexp"
-	"io"
 	"bufio"
+	"io"
 	"os"
+	"regexp"
 	"sort"
 )
 `
@@ -373,7 +375,7 @@ func yylex() int {
 
 	for {
 		line, err := reader.ReadString('\n')
-		if len(line) == 0 && err == os.EOF {
+		if len(line) == 0 && err == io.EOF {
 			break
 		}
 
