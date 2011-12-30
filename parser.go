@@ -19,11 +19,11 @@ type Parser struct {
 
 	scNext int
 
-	res                  *LexFile
-	curRule              LexRule
-	curAction            string
-	appendNextAction     bool
-	stateActions_Written bool
+	res              *LexFile
+	curRule          LexRule
+	curAction        string
+	appendNextAction bool
+	madeToEpilogue   bool
 }
 
 func ParseLexFile(in io.Reader) *LexFile {
@@ -34,15 +34,15 @@ func ParseLexFile(in io.Reader) *LexFile {
 
 func NewParser() *Parser {
 	return &Parser{state: (*Parser).statePrologue,
-		seenPackage:          false,
-		inComment:            false,
-		parseSubs:            make(map[string]string),
-		patStack:             list.New(),
-		scNext:               1024,
-		res:                  NewLexFile(),
-		curAction:            "",
-		appendNextAction:     false,
-		stateActions_Written: false}
+		seenPackage:      false,
+		inComment:        false,
+		parseSubs:        make(map[string]string),
+		patStack:         list.New(),
+		scNext:           1024,
+		res:              NewLexFile(),
+		curAction:        "",
+		appendNextAction: false,
+		madeToEpilogue:   false}
 }
 
 func (p *Parser) ParseInput(in io.Reader) {
@@ -64,7 +64,7 @@ func (p *Parser) ParseInput(in io.Reader) {
 		p.state(p, line)
 	}
 
-	if !p.stateActions_Written {
+	if !p.madeToEpilogue {
 		// Insert an artificial '%%' to ensure the last rule is written.
 		p.state(p, "%%")
 	}
@@ -193,6 +193,7 @@ func (p *Parser) stateActions(line string) {
 	if line == "%%" {
 		p.stateActions_Write()
 		p.state = (*Parser).stateEpilogue
+		p.madeToEpilogue = true
 		return
 	}
 
@@ -228,7 +229,6 @@ func (p *Parser) stateActions_Write() {
 		p.res.rules = append(p.res.rules, saved)
 		p.patStack.Remove(e)
 	}
-	p.stateActions_Written = true
 }
 
 func (p *Parser) stateEpilogue(line string) {
