@@ -16,7 +16,7 @@ _golex_ supports all features for regular expression matching as described in [f
  * character class set operations `[a-z]{-}[aeiou]`
  * matching EOF `<<EOF>>`
 
-The above restrictions are intended to be removed in future releases of _golex_.
+EOF-matching is intended to be added to a future release of _golex_. Character class operations, however, will not, unless Go's own regular expression library (based on [RE2](http://code.google.com/p/re2/)) comes to.
 
 A number of utility functions required for full flex emulation (mostly concerning manipulating the buffer (stack)) are also not yet available.
 
@@ -46,7 +46,7 @@ Other golexen include (but are not limited to):
 
 ## license
 
-Copyright 2011 Anneli Cuss
+Copyright 2011-2012 Arlen Cuss
 
 golex is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
