@@ -3,7 +3,7 @@
 
 ## introduction
 
-_golex_ is a [flex](http://flex.sourceforge.net)-compatible lexical analyser generator.
+_golex_ is a [flex](http://flex.sourceforge.net)-compatible lexical analyser generator, written for Go 1.
 
 The below description has been pilfered from flex's description in Debian, adapted to describe _golex_:
 
@@ -13,8 +13,8 @@ _golex_ is a tool for generating scanners: programs which recognize lexical patt
 
 _golex_ supports all features for regular expression matching as described in [flex's manual](http://flex.sourceforge.net/manual/Patterns.html#Patterns), _except_:
 
- * character class set operations `[a-z]{-}[aeiou]`
- * matching EOF `<<EOF>>`
+ * character class set operations `[a-z]{-}[aeiou]`, and
+ * matching EOF `<<EOF>>`.
 
 EOF-matching is intended to be added to a future release of _golex_. Character class operations, however, will not, unless Go's own regular expression library (based on [RE2](http://code.google.com/p/re2/)) comes to.
 
@@ -22,27 +22,27 @@ A number of utility functions required for full flex emulation (mostly concernin
 
 The full set of omissions (in regular expressions and otherwise) is detailed in the GitHub Issues for this repository.
 
-_golex_ and the scanners it generates are _not_ fast (unlike those of flex).
+_golex_ and the scanners it generates are _not_ fast (unlike those of flex).  Rather than implementing its own regular expression engine and crafting a state machine based on that, _golex_ simply defers to Go's built-in regular expressions, and matches character-by-character.  Pull requests to right this wrong gratefully accepted! :)
 
 ## examples
 
-Examples taken from throughout the flex manual have been converted to Go and are included as `*.l` in this distribution.
+Self-contained examples, taken from throughout the flex manual, have been converted to Go and are included as `*.l` in this distribution.  I invite you to compare them to the original _flex_ examples to note how similar they are. [Here are a few examples](http://flex.sourceforge.net/manual/Simple-Examples.html#Simple-Examples), found as `username.l`, `counter.l`, and `toypascal.l` in the _golex_ distribution.
 
-To try one, if you're using `6g` et al., something like the following should work:
+A `test` script for building and running an example is included.  For example:
 
-`make && ./golex file.l && 6g file.l.go && 6l file.l.6`
+`./test toypascal.l`
 
-The binary `6.out` is now your scanner.
+will build _golex_, run _golex_ on `toypascal.l`, build the resulting Go code, and then run the resulting lexer.
 
 ## other golexen
 
-This is not the first attempt at writing a _golex_ utility, though it might be the first with the aim of behaving as similarly to the original flex as possible.
+This is not the first attempt at writing a _golex_ utility, though it might be the first with the aim of behaving as similarly to the original _flex_ as possible.
 
 Other golexen include (but are not limited to):
 
  * [Ben Lynn](http://cs.stanford.edu/~blynn/)'s [Nex](http://cs.stanford.edu/~blynn/nex/) tool.
- * [CZ.NIC](http://www.nic.cz)'s [lex](git://git.nic.cz/go/lex) package.
- * [CZ.NIC](http://www.nic.cz)'s [golex](git://git.nic.cz/go/golex) tool.
+ * [CZ.NIC](http://www.nic.cz)'s package at `git://git.nic.cz/go/lex`.
+ * [CZ.NIC](http://www.nic.cz)'s tool at `git://git.nic.cz/go/golex` (it's not like the name is terribly original!).
 
 ## license
 
