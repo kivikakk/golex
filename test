@@ -1,6 +1,6 @@
 #!/bin/bash
-make
+go build
 ./golex $1
-8g $1.go
-8l $1.8
-./8.out
+go build -o out $1.go
+rm $1.go
+./out

@@ -173,7 +173,7 @@ func() (yyar yyactionreturn) {
 	return yyactionreturn{0, yyRT_FALLTHROUGH}
 }`
 
-	expr, _ := goparser.ParseExpr(fs, "", newCode)
+	expr, _ := goparser.ParseExpr(newCode)
 
 	fexp := expr.(*goast.FuncLit)
 
