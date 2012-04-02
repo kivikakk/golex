@@ -2,6 +2,7 @@ package main
 
 import (
 	"container/list"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -153,6 +154,15 @@ func (fp *flexParser) stateSubst() bool {
 	if fp.line[fp.i] != '}' {
 		return false
 	}
+
+	name := fp.line[fp.qStart+1 : fp.i]
+	repl, found := fp.p.parseSubs[name]
+	if !found {
+		panic(fmt.Sprintf("substitution {%s} found, but no such sub found!", name))
+	}
+
+	fp.line = fp.line[:fp.qStart] + "(" + repl + ")" + fp.line[fp.i+1:]
+	fp.i += 2 + len(repl) - len(name) - 2
 
 	fp.stateFunc = (*flexParser).stateRoot
 	return false
