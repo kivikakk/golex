@@ -1,5 +1,5 @@
 # golex
-#### <span style="color: #333">flex-compatible lexical analyser generator</span>
+#### flex-compatible lexical analyser generator
 
 ## introduction
 
@@ -46,4 +46,4 @@ Other golexen include (but are not limited to):
 
 ## license
 
-Copyright 2011-2017 Ashe Connor. Licensed under the [2-Clause BSD License](https://opensource.org/licenses/BSD-2-Clause).
+Copyright 2011-2022 Asherah Connor. Licensed under the [2-Clause BSD License](https://opensource.org/licenses/BSD-2-Clause).

@@ -1,6 +1,5 @@
 #!/bin/bash
 go build
 ./golex $1
-go build -o out $1.go
-rm $1.go
-./out
+trap "rm $1.go" EXIT
+go run $1.go
