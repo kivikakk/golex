@@ -1,4 +1,5 @@
-# golex
+# [golex](https://hrzn.ee/kivikakk/golex)
+
 #### flex-compatible lexical analyser generator
 
 ## introduction
